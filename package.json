@@ -20,7 +20,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/tehw0lf/n8n-nodes-toon.git"
+		"url": "git+https://github.com/tehw0lf/n8n-nodes-toon.git"
 	},
 	"scripts": {
 		"build": "n8n-node build",
