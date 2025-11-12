@@ -1,0 +1,61 @@
+{
+    "name": "n8n-nodes-toon",
+    "version": "1.0.0",
+    "description": "n8n node for TOON (Token-Oriented Object Notation) format conversion - bidirectional conversion between TOON and JSON with zero external dependencies",
+    "license": "MIT",
+    "homepage": "https://github.com/tehw0lf/n8n-nodes-toon#readme",
+    "keywords": [
+        "n8n-community-node-package",
+        "toon",
+        "json",
+        "data-transformation",
+        "format-conversion",
+        "serialization",
+        "llm",
+        "token-optimization"
+    ],
+    "author": {
+        "name": "tehw0lf",
+        "email": "tehwolf@protonmail.com"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tehw0lf/n8n-nodes-toon.git"
+    },
+    "scripts": {
+        "build": "n8n-node build",
+        "build:watch": "tsc --watch",
+        "dev": "n8n-node dev",
+        "lint": "n8n-node lint",
+        "lint:fix": "n8n-node lint --fix",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "release": "n8n-node release",
+        "prepublishOnly": "n8n-node prerelease"
+    },
+    "files": [
+        "dist"
+    ],
+    "n8n": {
+        "n8nNodesApiVersion": 1,
+        "strict": true,
+        "credentials": [],
+        "nodes": [
+            "dist/nodes/Toon/Toon.node.js"
+        ]
+    },
+    "devDependencies": {
+        "@n8n/node-cli": "*",
+        "@types/jest": "^30.0.0",
+        "eslint": "9.32.0",
+        "jest": "^30.2.0",
+        "prettier": "3.6.2",
+        "release-it": "^19.0.4",
+        "ts-jest": "^29.4.5",
+        "typescript": "5.9.2"
+    },
+    "peerDependencies": {
+        "n8n-workflow": "*"
+    }
+}

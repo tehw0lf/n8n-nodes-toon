@@ -1,0 +1,15 @@
+{
+	"node": "n8n-nodes-toon",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Development", "Data & Storage"],
+	"resources": {
+		"credentialDocumentation": [],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/tehw0lf/n8n-nodes-toon#readme"
+			}
+		]
+	},
+	"alias": ["JSON", "Data Format", "Conversion"]
+}
