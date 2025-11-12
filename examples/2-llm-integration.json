@@ -1,0 +1,71 @@
+{
+  "name": "Example 2: LLM Integration with TOON",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.example.com/products",
+        "authentication": "none",
+        "requestMethod": "GET",
+        "options": {}
+      },
+      "name": "Fetch Products (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "jsonToToon",
+        "indent": 2,
+        "delimiter": "comma",
+        "keyFolding": "safe",
+        "inputField": "data",
+        "outputField": "toon"
+      },
+      "name": "Convert to TOON",
+      "type": "n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a helpful assistant that analyzes product data."
+            },
+            {
+              "role": "user",
+              "content": "=Analyze these products and provide recommendations:\\n\\n{{ $json.toon }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "OpenAI",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{"node": "Fetch Products (API)", "type": "main", "index": 0}]]
+    },
+    "Fetch Products (API)": {
+      "main": [[{"node": "Convert to TOON", "type": "main", "index": 0}]]
+    },
+    "Convert to TOON": {
+      "main": [[{"node": "OpenAI", "type": "main", "index": 0}]]
+    }
+  }
+}

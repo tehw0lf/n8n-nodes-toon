@@ -1,0 +1,51 @@
+{
+  "name": "Example 1: JSON to TOON Basic",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "data",
+              "value": "={{ {\n  \"users\": [\n    {\"id\": 1, \"name\": \"Alice\", \"role\": \"admin\"},\n    {\"id\": 2, \"name\": \"Bob\", \"role\": \"user\"},\n    {\"id\": 3, \"name\": \"Charlie\", \"role\": \"user\"}\n  ]\n} }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Sample Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "jsonToToon",
+        "indent": 2,
+        "delimiter": "comma",
+        "keyFolding": "off",
+        "inputField": "data",
+        "outputField": "toon"
+      },
+      "name": "TOON - JSON to TOON",
+      "type": "n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{"node": "Sample Data", "type": "main", "index": 0}]]
+    },
+    "Sample Data": {
+      "main": [[{"node": "TOON - JSON to TOON", "type": "main", "index": 0}]]
+    }
+  }
+}

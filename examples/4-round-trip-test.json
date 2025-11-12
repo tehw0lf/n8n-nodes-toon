@@ -1,0 +1,80 @@
+{
+  "name": "Example 4: Round-Trip Verification",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "originalData",
+              "value": "={{ {\n  \"id\": 123,\n  \"name\": \"Test Product\",\n  \"tags\": [\"electronics\", \"gadgets\"],\n  \"metadata\": {\n    \"created\": \"2025-01-01\",\n    \"updated\": \"2025-11-12\"\n  }\n} }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Original Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "jsonToToon",
+        "indent": 2,
+        "delimiter": "comma",
+        "keyFolding": "off",
+        "inputField": "originalData",
+        "outputField": "toon"
+      },
+      "name": "JSON to TOON",
+      "type": "n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toonToJson",
+        "indent": 2,
+        "strict": true,
+        "expandPaths": "off",
+        "inputField": "toon",
+        "outputField": "roundTrip"
+      },
+      "name": "TOON to JSON",
+      "type": "n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Verify round-trip is identical\nconst originalData = items[0].json.originalData;\nconst roundTripData = items[0].json.roundTrip;\n\n// Parse originalData if it's a string, otherwise use as-is\nconst original = typeof originalData === 'string' ? JSON.parse(originalData) : originalData;\n// roundTrip should already be an object from TOON to JSON conversion\nconst roundTrip = typeof roundTripData === 'string' ? JSON.parse(roundTripData) : roundTripData;\n\nconst isIdentical = JSON.stringify(original) === JSON.stringify(roundTrip);\n\nreturn [{\n  json: {\n    ...items[0].json,\n    isIdentical,\n    message: isIdentical ? 'Round-trip successful!' : 'Round-trip failed - data mismatch'\n  }\n}];"
+      },
+      "name": "Verify Round-Trip",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{"node": "Original Data", "type": "main", "index": 0}]]
+    },
+    "Original Data": {
+      "main": [[{"node": "JSON to TOON", "type": "main", "index": 0}]]
+    },
+    "JSON to TOON": {
+      "main": [[{"node": "TOON to JSON", "type": "main", "index": 0}]]
+    },
+    "TOON to JSON": {
+      "main": [[{"node": "Verify Round-Trip", "type": "main", "index": 0}]]
+    }
+  }
+}
