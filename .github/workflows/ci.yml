@@ -23,5 +23,6 @@ jobs:
       event_name: ${{ github.event_name }}
       artifact_path: "dist"
       library_path: "dist"
+      publish_github_release: "false"
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
