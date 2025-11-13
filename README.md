@@ -123,9 +123,26 @@ Parse TOON formatted text back to JSON.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| **Input Mode** | Choice | `field` | Use specific field or entire JSON |
-| **Input Field** | String | `data` | Field containing input data |
+| **Input Mode** | Choice | `field` | How to access input data: `field`, `expression`, or `json` |
+| **Input Field** | String | `data` | Field containing input data. Supports dot notation (`sampleData.users`), array indices (`users[0]`), and drag-and-drop expressions |
+| **Input Expression** | String | `={{ $json }}` | n8n expression for advanced data access (only in Expression mode) |
 | **Output Field** | String | `data` | Field name for output |
+
+#### Input Mode Details
+
+- **Field**: Access data using field names with support for:
+  - Simple fields: `data`
+  - Nested objects: `sampleData.users`
+  - Array indices: `users[0]`
+  - Combined paths: `sampleData.users[0]`
+  - Drag-and-drop from input data (automatically evaluated)
+
+- **Expression**: Use n8n expressions for advanced scenarios:
+  - Complex expressions: `{{ $json.users.filter(u => u.active) }}`
+  - Cross-node references: `{{ $('Previous Node').item.json.data }}`
+  - Computed values: `{{ $json.items.map(i => i.value).join(',') }}`
+
+- **Entire JSON**: Process the complete input JSON object
 
 ## Usage Examples
 

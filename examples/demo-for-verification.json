@@ -1,0 +1,262 @@
+{
+  "name": "TOON Node Demo - Verification Video",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9784abc5-b214-4e51-b577-eebaa01b8906",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sample-data",
+              "name": "sampleData",
+              "value": "={{ {\n  \"users\": [\n    {\"id\": 1, \"name\": \"Alice\", \"role\": \"admin\", \"active\": true},\n    {\"id\": 2, \"name\": \"Bob\", \"role\": \"user\", \"active\": true},\n    {\"id\": 3, \"name\": \"Charlie\", \"role\": \"user\", \"active\": false}\n  ],\n  \"metadata\": {\n    \"total\": 3,\n    \"timestamp\": \"2025-01-13T12:00:00Z\"\n  }\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b05cffdc-ec55-459a-aaad-78125400f409",
+      "name": "1. Sample JSON Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -224,
+        112
+      ],
+      "notes": "Sample data showing users array and metadata object"
+    },
+    {
+      "parameters": {
+        "inputMode": "json"
+      },
+      "id": "5d2f5a78-740d-4074-98eb-0d0e4750956a",
+      "name": "2a. JSON→TOON (Comma)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Convert to TOON with comma delimiter"
+    },
+    {
+      "parameters": {
+        "inputMode": "json",
+        "delimiter": "tab"
+      },
+      "id": "0f6900bb-3429-42c8-bee2-b35123c0a120",
+      "name": "2b. JSON→TOON (Tab)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ],
+      "notes": "Same data with tab delimiter"
+    },
+    {
+      "parameters": {
+        "inputField": "sampleData.users"
+      },
+      "id": "field-users-array",
+      "name": "2c. Field Mode (users array)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        0,
+        310
+      ],
+      "notes": "Convert only the users array using Field mode with dot notation"
+    },
+    {
+      "parameters": {
+        "inputField": "sampleData.users[0]"
+      },
+      "id": "field-first-user",
+      "name": "2d. Field Mode (first user)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        0,
+        412
+      ],
+      "notes": "Convert only the first user using Field mode with array index"
+    },
+    {
+      "parameters": {
+        "operation": "toonToJson"
+      },
+      "id": "17564028-dd13-4459-a63f-27a4feb3416d",
+      "name": "3. TOON→JSON (Round-trip)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Parse TOON back to JSON - should match original"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "nested-data",
+              "name": "nestedData",
+              "value": "={{ {\n  \"api\": {\n    \"config\": {\n      \"endpoint\": \"https://api.example.com\",\n      \"timeout\": 30\n    }\n  }\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cce16f23-d1d3-43a2-9ac6-86d730786aab",
+      "name": "4. Nested Data Sample",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -224,
+        400
+      ],
+      "notes": "Deeply nested object for key folding demo"
+    },
+    {
+      "parameters": {
+        "inputField": "nestedData",
+        "keyFolding": "safe"
+      },
+      "id": "8a6d1b00-9e1f-4d8a-a505-c9ad0dcf4f9e",
+      "name": "5. JSON→TOON (Key Folding)",
+      "type": "@tehw0lf/n8n-nodes-toon.toon",
+      "typeVersion": 1,
+      "position": [
+        0,
+        550
+      ],
+      "notes": "Field mode with key folding - creates api.config.endpoint format"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "comparison-text",
+              "name": "comparisonNote",
+              "value": "TOON format is 40-50% more compact than JSON for tabular data, making it ideal for LLM prompts where token limits matter.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22eac8c8-7161-417d-b441-5b1395f21f74",
+      "name": "6. Token Savings Note",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Highlight the main use case"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "1. Sample JSON Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "4. Nested Data Sample",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Sample JSON Data": {
+      "main": [
+        [
+          {
+            "node": "2a. JSON→TOON (Comma)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2b. JSON→TOON (Tab)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2c. Field Mode (users array)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2d. Field Mode (first user)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2a. JSON→TOON (Comma)": {
+      "main": [
+        [
+          {
+            "node": "3. TOON→JSON (Round-trip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. TOON→JSON (Round-trip)": {
+      "main": [
+        [
+          {
+            "node": "6. Token Savings Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Nested Data Sample": {
+      "main": [
+        [
+          {
+            "node": "5. JSON→TOON (Key Folding)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7154c41d-53c4-4453-93fd-0d75db33287e",
+  "meta": {
+    "instanceId": "266a37ee54339331bf88a7f09c0264d93f13fdc69414ce84ed0579f1f4509030"
+  },
+  "id": "YUxgNTbb3ZygOfkw",
+  "tags": []
+}
