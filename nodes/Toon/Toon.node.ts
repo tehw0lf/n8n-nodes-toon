@@ -156,40 +156,12 @@ export class Toon implements INodeType {
 
 			// Input/Output configuration
 			{
-				displayName: 'Input Mode',
-				name: 'inputMode',
-				type: 'options',
-				options: [
-					{ name: 'Field', value: 'field' },
-					{ name: 'Expression', value: 'expression' },
-					{ name: 'Entire JSON', value: 'json' },
-				],
-				default: 'field',
-				description: 'Whether to use a specific field, an expression, or the entire JSON object',
-			},
-			{
-				displayName: 'Input Field',
-				name: 'inputField',
-				type: 'string',
-				default: 'data',
-				description: 'Field containing input data. Supports simple field names ("data"), dot notation ("sampleData.users[0]"), and expressions (drag-and-drop works!).',
-				displayOptions: {
-					show: {
-						inputMode: ['field'],
-					},
-				},
-			},
-			{
-				displayName: 'Input Expression',
-				name: 'inputExpression',
+				displayName: 'Input Data',
+				name: 'inputData',
 				type: 'string',
 				default: '={{ $json }}',
-				description: 'Expression that evaluates to the input data. Use n8n expressions like {{ $JSON.sampleData.users[0] }}.',
-				displayOptions: {
-					show: {
-						inputMode: ['expression'],
-					},
-				},
+				description: 'Drag and drop data from the left, use a field name (e.g., "data"), dot notation (e.g., "users[0].name"), or the entire input with {{ $JSON }}. Auto-detects the input type.',
+				placeholder: 'Drag data here or enter field name',
 			},
 			{
 				displayName: 'Output Field',
@@ -209,42 +181,43 @@ export class Toon implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
-				const inputMode = this.getNodeParameter('inputMode', itemIndex) as string;
 				const outputField = this.getNodeParameter('outputField', itemIndex) as string;
+
+				// Get inputData parameter - n8n will auto-evaluate expressions
+				const inputDataParam = this.getNodeParameter('inputData', itemIndex);
 
 				let inputData: unknown;
 
-				if (inputMode === 'json') {
-					inputData = items[itemIndex].json;
-				} else if (inputMode === 'expression') {
-					// Expression mode: n8n evaluates the expression and returns the result
-					inputData = this.getNodeParameter('inputExpression', itemIndex);
+				// Auto-detect mode based on what n8n returned:
+				// 1. If it's not a string, n8n evaluated an expression (e.g., {{ $json }}) -> use directly
+				// 2. If it's a string, it's either a field path or literal data for decoding
+				if (typeof inputDataParam !== 'string') {
+					// n8n evaluated an expression - use the result directly
+					inputData = inputDataParam;
 				} else {
-					// Field mode: supports both plain field names and expressions
-					const inputField = this.getNodeParameter('inputField', itemIndex);
+					// It's a string - could be a field path like "data" or "users[0].name"
+					// Try to navigate the field path in the input JSON
+					const fieldPath = inputDataParam.split('.');
+					inputData = fieldPath.reduce((obj: IDataObject | unknown, key: string) => {
+						if (obj === null || obj === undefined) {
+							return undefined;
+						}
+						// Handle array indices like "users[0]"
+						const arrayMatch = key.match(/^(.+?)\[(\d+)\]$/);
+						if (arrayMatch) {
+							const [, arrayName, indexStr] = arrayMatch;
+							const index = parseInt(indexStr, 10);
+							const objAsRecord = obj as Record<string, unknown>;
+							const arrayValue = objAsRecord[arrayName] as unknown[];
+							return arrayValue?.[index];
+						}
+						return (obj as IDataObject)[key];
+					}, items[itemIndex].json as IDataObject);
 
-					// If the parameter value is not a string, it means n8n evaluated an expression
-					// and we already have the final data
-					if (typeof inputField !== 'string') {
-						inputData = inputField;
-					} else {
-						// It's a plain field path - navigate using dot notation
-						const fieldPath = inputField.split('.');
-						inputData = fieldPath.reduce((obj: IDataObject | unknown, key: string) => {
-							if (obj === null || obj === undefined) {
-								return undefined;
-							}
-							// Handle array indices like "users[0]"
-							const arrayMatch = key.match(/^(.+?)\[(\d+)\]$/);
-							if (arrayMatch) {
-								const [, arrayName, indexStr] = arrayMatch;
-								const index = parseInt(indexStr, 10);
-								const objAsRecord = obj as Record<string, unknown>;
-								const arrayValue = objAsRecord[arrayName] as unknown[];
-								return arrayValue?.[index];
-							}
-							return (obj as IDataObject)[key];
-						}, items[itemIndex].json as IDataObject);
+					// If field path navigation returned undefined and operation is toonToJson,
+					// treat the string as literal TOON data to decode
+					if (inputData === undefined && operation === 'toonToJson') {
+						inputData = inputDataParam;
 					}
 				}
 
