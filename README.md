@@ -320,6 +320,33 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 - **Node.js:** 18.x or later
 - **TOON Specification:** v3.0
 
+## Specification Compliance
+
+This node implements **TOON Specification v3.0** with comprehensive coverage of all core features and major optional features.
+
+### Implemented Features
+
+✅ **Core Features (100%)**
+- All JSON data types (objects, arrays, primitives)
+- Indentation-based structure with configurable spacing
+- Array length declarations `[N]`
+- Tabular arrays for uniform objects `[N]{field1,field2}:`
+- All three delimiters: comma (default), tab, pipe
+- Deterministic string quoting and escaping
+- Strict mode validation with array count and width checking
+
+✅ **Optional Features**
+- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
+- **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
+
+### Not Implemented
+
+❌ **Hyphen Syntax for List-Item Objects (§10)** - Optional YAML-style compact notation for objects in arrays. This is a purely cosmetic encoding optimization that doesn't affect functionality or data compatibility. Our implementation uses standard object indentation instead, which is equally spec-compliant and easier to maintain.
+
+### Round-Trip Guarantee
+
+All JSON data can be encoded to TOON and decoded back to JSON with full fidelity. The implementation passes all conformance requirements for encoders and decoders per the specification.
+
 ## Advanced Features
 
 ### Strict Mode
