@@ -3,13 +3,13 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "1a6721ef-761f-4252-af86-4c8d25f8bc7f",
+      "id": "7870a467-a3e3-46c0-bd45-70f16ed4a479",
       "name": "When clicking 'Test workflow'",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        272,
-        224
+        -384,
+        48
       ]
     },
     {
@@ -26,25 +26,27 @@
         },
         "options": {}
       },
-      "id": "af314a4f-53f6-4b21-ba2c-6f1c9491f5f0",
+      "id": "35a0304f-81c3-4ce9-84a0-550698b743e5",
       "name": "1. Sample JSON Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        496,
-        32
+        -160,
+        -144
       ],
       "notes": "Sample data showing users array and metadata object"
     },
     {
-      "parameters": {},
-      "id": "ed89c2b0-f4ed-4c95-839e-424e7b25aa09",
+      "parameters": {
+        "includeTokenMetrics": true
+      },
+      "id": "79d5c699-1a82-47ff-b7f2-0e2f6a833e3e",
       "name": "2a. JSON→TOON (Comma)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        720,
-        -256
+        64,
+        -432
       ],
       "notes": "Convert to TOON with comma delimiter"
     },
@@ -52,37 +54,37 @@
       "parameters": {
         "delimiter": "tab"
       },
-      "id": "780ad667-8e2a-4a8e-8ac1-d9288a112eb4",
+      "id": "a23ec5d1-8bc6-4add-93e1-bf4066ea6adf",
       "name": "2b. JSON→TOON (Tab)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        720,
-        -64
+        64,
+        -240
       ],
       "notes": "Same data with tab delimiter"
     },
     {
       "parameters": {},
-      "id": "f17c3783-298d-4f29-9dfb-5cf2a8f26bc1",
+      "id": "ddc5b02e-5294-4eac-9011-dc801276d8ed",
       "name": "2c. Field Mode (users array)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        720,
-        128
+        64,
+        -48
       ],
       "notes": "Convert only the users array using Field mode with dot notation"
     },
     {
       "parameters": {},
-      "id": "4be3d763-6697-4e42-9353-425ce9842784",
+      "id": "67027875-6d23-4b41-97f8-f1925616ed04",
       "name": "2d. Field Mode (first user)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        720,
-        320
+        64,
+        144
       ],
       "notes": "Convert only the first user using Field mode with array index"
     },
@@ -91,13 +93,13 @@
         "operation": "toonToJson",
         "inputData": "={{ $json.data }}"
       },
-      "id": "702d5460-25e6-48e1-9a64-ccc0feca81d4",
+      "id": "ff4550a1-bb34-4708-800a-ff88db1f3100",
       "name": "3. TOON→JSON (Round-trip)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        944,
-        -256
+        288,
+        -432
       ],
       "notes": "Parse TOON back to JSON - should match original"
     },
@@ -115,13 +117,13 @@
         },
         "options": {}
       },
-      "id": "b101e1b5-1e38-4e03-a40d-5f41a0914547",
+      "id": "fcb87105-fc68-46c0-ae83-be632a6385f3",
       "name": "4. Nested Data Sample",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        496,
-        512
+        -160,
+        336
       ],
       "notes": "Deeply nested object for key folding demo"
     },
@@ -129,37 +131,30 @@
       "parameters": {
         "keyFolding": "safe"
       },
-      "id": "d2462993-7126-4111-824d-d029148f1030",
+      "id": "56b0f6e4-c85e-4c72-9472-4b2d59f0c01f",
       "name": "5. JSON→TOON (Key Folding)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        720,
-        512
+        64,
+        336
       ],
       "notes": "Field mode with key folding - creates api.config.endpoint format"
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "comparison-text",
-              "name": "comparisonNote",
-              "value": "TOON format is 40-50% more compact than JSON for tabular data, making it ideal for LLM prompts where token limits matter.",
-              "type": "string"
-            }
-          ]
-        },
+        "includeOtherFields": true,
+        "include": "selected",
+        "includeFields": "tokenMetrics",
         "options": {}
       },
-      "id": "dfcb073b-77c3-430d-b1d3-bea2bb1d67d6",
+      "id": "6c28204e-cbdb-4a20-b811-5eb282c4468c",
       "name": "6. Token Savings Note",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        1168,
-        -256
+        512,
+        -432
       ],
       "notes": "Highlight the main use case"
     }
@@ -246,10 +241,11 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "528268f9-7968-4d38-b2c2-d22a1f849c67",
+  "versionId": "1a859438-f8fc-45ec-a7ec-1a7a9ab9c580",
   "meta": {
-    "instanceId": "266a37ee54339331bf88a7f09c0264d93f13fdc69414ce84ed0579f1f4509030"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a54d7c02eaa49124b7b802f57e79744d439001ef5feaa80d75f93e75e82ecd46"
   },
-  "id": "lnumFvXR4GsvhChz",
+  "id": "7nZ11X4m1A1wkuW2",
   "tags": []
 }
