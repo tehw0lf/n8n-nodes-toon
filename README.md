@@ -318,7 +318,7 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 - **n8n version:** 0.200.0 or later
 - **Node.js:** 18.x or later
-- **TOON Specification:** v2.0
+- **TOON Specification:** v3.0
 
 ## Advanced Features
 
@@ -397,7 +397,7 @@ This node has **zero production dependencies**:
 
 ## Resources
 
-- **TOON Specification:** See [SPEC.md](SPEC.md) in the repository for complete format details
+- **TOON Specification v3.0:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
 - **n8n Documentation:** https://docs.n8n.io/
 - **Community Nodes Guide:** https://docs.n8n.io/integrations/community-nodes/
 - **GitHub Repository:** https://github.com/tehw0lf/n8n-nodes-toon
@@ -417,4 +417,4 @@ Contributions are welcome! Please open an issue or pull request on GitHub.
 
 ---
 
-**Note:** This node implements the TOON Specification v2.0. See `SPEC.md` for complete format documentation.
+**Note:** This node implements the [TOON Specification v3.0](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
