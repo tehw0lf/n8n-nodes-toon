@@ -110,6 +110,7 @@ Parse TOON formatted text back to JSON.
 | **Delimiter** | Choice | `comma` | Delimiter for array values (`comma`, `tab`, `pipe`) |
 | **Key Folding** | Choice | `off` | Collapse single-key chains (`off`, `safe`) |
 | **Flatten Depth** | Number | `999` | Maximum segments to fold (999 = unlimited) |
+| **Include Token Metrics** | Boolean | `false` | Add token count comparison to output |
 
 ### Decoding Options (TOON→JSON)
 
@@ -123,26 +124,38 @@ Parse TOON formatted text back to JSON.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| **Input Mode** | Choice | `field` | How to access input data: `field`, `expression`, or `json` |
-| **Input Field** | String | `data` | Field containing input data. Supports dot notation (`sampleData.users`), array indices (`users[0]`), and drag-and-drop expressions |
-| **Input Expression** | String | `={{ $json }}` | n8n expression for advanced data access (only in Expression mode) |
+| **Input Data** | String | `={{ $json }}` | Data to convert. Supports drag-and-drop, field names, dot notation, and expressions. Auto-detects input type. |
 | **Output Field** | String | `data` | Field name for output |
 
-#### Input Mode Details
+#### Input Data Details
 
-- **Field**: Access data using field names with support for:
-  - Simple fields: `data`
-  - Nested objects: `sampleData.users`
-  - Array indices: `users[0]`
-  - Combined paths: `sampleData.users[0]`
-  - Drag-and-drop from input data (automatically evaluated)
+The **Input Data** field auto-detects the input type:
+- **Drag-and-drop**: Drag fields from the left panel - automatically evaluated by n8n
+- **Field names**: Simple field access (e.g., `data`)
+- **Dot notation**: Nested access (e.g., `users[0].name`)
+- **Expressions**: Full n8n expressions (e.g., `={{ $json.users.filter(u => u.active) }}`)
+- **Literal TOON** (for decoding): If a string doesn't match a field path, treated as TOON data
 
-- **Expression**: Use n8n expressions for advanced scenarios:
-  - Complex expressions: `{{ $json.users.filter(u => u.active) }}`
-  - Cross-node references: `{{ $('Previous Node').item.json.data }}`
-  - Computed values: `{{ $json.items.map(i => i.value).join(',') }}`
+### Token Metrics Output
 
-- **Entire JSON**: Process the complete input JSON object
+When **Include Token Metrics** is enabled for JSON→TOON conversion, the output includes a `tokenMetrics` object:
+
+```json
+{
+  "data": "users[2]{id,name}:\n  1,Alice\n  2,Bob",
+  "tokenMetrics": {
+    "json": 123,
+    "toon": 58,
+    "saved": 65,
+    "reduction": 0.5285
+  }
+}
+```
+
+- **json**: Estimated token count for JSON input
+- **toon**: Estimated token count for TOON output
+- **saved**: Number of tokens saved
+- **reduction**: Reduction ratio (0.5285 = 52.85% reduction)
 
 ## Usage Examples
 
@@ -353,6 +366,8 @@ This node has **zero production dependencies**:
 - No external libraries required
 - Minimal package size
 - No security vulnerabilities from dependencies
+
+**Note:** There is another package called `n8n-nodes-toon` (non-scoped) that wraps the official `@toon-format/toon` library. This package (`@tehw0lf/n8n-nodes-toon`) implements the TOON specification directly, resulting in zero production dependencies and full control over the implementation.
 
 ## Troubleshooting
 

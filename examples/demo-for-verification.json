@@ -3,13 +3,13 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "9784abc5-b214-4e51-b577-eebaa01b8906",
+      "id": "1a6721ef-761f-4252-af86-4c8d25f8bc7f",
       "name": "When clicking 'Test workflow'",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -448,
-        112
+        272,
+        224
       ]
     },
     {
@@ -26,84 +26,78 @@
         },
         "options": {}
       },
-      "id": "b05cffdc-ec55-459a-aaad-78125400f409",
+      "id": "af314a4f-53f6-4b21-ba2c-6f1c9491f5f0",
       "name": "1. Sample JSON Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        -224,
-        112
+        496,
+        32
       ],
       "notes": "Sample data showing users array and metadata object"
     },
     {
-      "parameters": {
-        "inputMode": "json"
-      },
-      "id": "5d2f5a78-740d-4074-98eb-0d0e4750956a",
+      "parameters": {},
+      "id": "ed89c2b0-f4ed-4c95-839e-424e7b25aa09",
       "name": "2a. JSON→TOON (Comma)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        0,
-        0
+        720,
+        -256
       ],
       "notes": "Convert to TOON with comma delimiter"
     },
     {
       "parameters": {
-        "inputMode": "json",
         "delimiter": "tab"
       },
-      "id": "0f6900bb-3429-42c8-bee2-b35123c0a120",
+      "id": "780ad667-8e2a-4a8e-8ac1-d9288a112eb4",
       "name": "2b. JSON→TOON (Tab)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        0,
-        208
+        720,
+        -64
       ],
       "notes": "Same data with tab delimiter"
     },
     {
-      "parameters": {
-        "inputField": "sampleData.users"
-      },
-      "id": "field-users-array",
+      "parameters": {},
+      "id": "f17c3783-298d-4f29-9dfb-5cf2a8f26bc1",
       "name": "2c. Field Mode (users array)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        0,
-        310
+        720,
+        128
       ],
       "notes": "Convert only the users array using Field mode with dot notation"
     },
     {
-      "parameters": {
-        "inputField": "sampleData.users[0]"
-      },
-      "id": "field-first-user",
+      "parameters": {},
+      "id": "4be3d763-6697-4e42-9353-425ce9842784",
       "name": "2d. Field Mode (first user)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        0,
-        412
+        720,
+        320
       ],
       "notes": "Convert only the first user using Field mode with array index"
     },
     {
       "parameters": {
-        "operation": "toonToJson"
+        "operation": "toonToJson",
+        "inputData": "={{ $json.data }}"
       },
-      "id": "17564028-dd13-4459-a63f-27a4feb3416d",
+      "id": "702d5460-25e6-48e1-9a64-ccc0feca81d4",
       "name": "3. TOON→JSON (Round-trip)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        224,
-        0
+        944,
+        -256
       ],
       "notes": "Parse TOON back to JSON - should match original"
     },
@@ -121,28 +115,27 @@
         },
         "options": {}
       },
-      "id": "cce16f23-d1d3-43a2-9ac6-86d730786aab",
+      "id": "b101e1b5-1e38-4e03-a40d-5f41a0914547",
       "name": "4. Nested Data Sample",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        -224,
-        400
+        496,
+        512
       ],
       "notes": "Deeply nested object for key folding demo"
     },
     {
       "parameters": {
-        "inputField": "nestedData",
         "keyFolding": "safe"
       },
-      "id": "8a6d1b00-9e1f-4d8a-a505-c9ad0dcf4f9e",
+      "id": "d2462993-7126-4111-824d-d029148f1030",
       "name": "5. JSON→TOON (Key Folding)",
       "type": "@tehw0lf/n8n-nodes-toon.toon",
       "typeVersion": 1,
       "position": [
-        0,
-        550
+        720,
+        512
       ],
       "notes": "Field mode with key folding - creates api.config.endpoint format"
     },
@@ -160,13 +153,13 @@
         },
         "options": {}
       },
-      "id": "22eac8c8-7161-417d-b441-5b1395f21f74",
+      "id": "dfcb073b-77c3-430d-b1d3-bea2bb1d67d6",
       "name": "6. Token Savings Note",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        448,
-        0
+        1168,
+        -256
       ],
       "notes": "Highlight the main use case"
     }
@@ -253,10 +246,10 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "7154c41d-53c4-4453-93fd-0d75db33287e",
+  "versionId": "528268f9-7968-4d38-b2c2-d22a1f849c67",
   "meta": {
     "instanceId": "266a37ee54339331bf88a7f09c0264d93f13fdc69414ce84ed0579f1f4509030"
   },
-  "id": "YUxgNTbb3ZygOfkw",
+  "id": "lnumFvXR4GsvhChz",
   "tags": []
 }

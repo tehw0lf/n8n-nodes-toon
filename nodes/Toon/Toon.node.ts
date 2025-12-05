@@ -111,6 +111,18 @@ export class Toon implements INodeType {
 					},
 				},
 			},
+			{
+				displayName: 'Include Token Metrics',
+				name: 'includeTokenMetrics',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to include token count comparison metrics in the output',
+				displayOptions: {
+					show: {
+						operation: ['jsonToToon'],
+					},
+				},
+			},
 
 			// Decoding options (for toonToJson)
 			{
@@ -222,11 +234,15 @@ export class Toon implements INodeType {
 				}
 
 				let result: unknown;
+				let tokenMetrics: IDataObject | undefined;
 
 				switch (operation) {
-					case 'jsonToToon':
-						result = convertJsonToToon.call(this, inputData, itemIndex);
+					case 'jsonToToon': {
+						const conversionResult = convertJsonToToon.call(this, inputData, itemIndex);
+						result = conversionResult.toon;
+						tokenMetrics = conversionResult.tokenMetrics;
 						break;
+					}
 					case 'toonToJson':
 						result = convertToonToJson.call(this, inputData as string, itemIndex);
 						break;
@@ -238,11 +254,18 @@ export class Toon implements INodeType {
 						);
 				}
 
+				const outputJson = {
+					...(items[itemIndex].json as object),
+					[outputField]: result,
+				} as IDataObject;
+
+				// Add token metrics if available
+				if (tokenMetrics) {
+					outputJson.tokenMetrics = tokenMetrics;
+				}
+
 				returnData.push({
-					json: {
-						...(items[itemIndex].json as object),
-						[outputField]: result,
-					} as IDataObject,
+					json: outputJson,
 					pairedItem: { item: itemIndex },
 				});
 			} catch (error) {
@@ -274,27 +297,60 @@ export class Toon implements INodeType {
 /**
  * Convert JSON to TOON
  */
-function convertJsonToToon(this: IExecuteFunctions, data: unknown, itemIndex: number): string {
-		const indent = this.getNodeParameter('indent', itemIndex) as number;
-		const delimiterOption = this.getNodeParameter('delimiter', itemIndex) as
-			| 'comma'
-			| 'tab'
-			| 'pipe';
-		const keyFolding = this.getNodeParameter('keyFolding', itemIndex) as 'off' | 'safe';
-		const flattenDepth = keyFolding === 'safe'
-			? (this.getNodeParameter('flattenDepth', itemIndex) as number)
-			: Infinity;
+function convertJsonToToon(
+	this: IExecuteFunctions,
+	data: unknown,
+	itemIndex: number,
+): { toon: string; tokenMetrics?: IDataObject } {
+	const indent = this.getNodeParameter('indent', itemIndex) as number;
+	const delimiterOption = this.getNodeParameter('delimiter', itemIndex) as
+		| 'comma'
+		| 'tab'
+		| 'pipe';
+	const keyFolding = this.getNodeParameter('keyFolding', itemIndex) as 'off' | 'safe';
+	const flattenDepth =
+		keyFolding === 'safe' ? (this.getNodeParameter('flattenDepth', itemIndex) as number) : Infinity;
+	const includeTokenMetrics = this.getNodeParameter('includeTokenMetrics', itemIndex) as boolean;
 
-		const options: EncoderOptions = {
-			indent,
-			delimiter: utils.getDelimiterChar(delimiterOption),
-			keyFolding,
-			flattenDepth: flattenDepth === 999 ? Infinity : flattenDepth,
+	const options: EncoderOptions = {
+		indent,
+		delimiter: utils.getDelimiterChar(delimiterOption),
+		keyFolding,
+		flattenDepth: flattenDepth === 999 ? Infinity : flattenDepth,
+	};
+
+	const encoder = new ToonEncoder(options);
+	const toonOutput = encoder.encode(data);
+
+	// Calculate token metrics if requested
+	let tokenMetrics: IDataObject | undefined;
+	if (includeTokenMetrics) {
+		const jsonString = JSON.stringify(data);
+		const jsonTokens = estimateTokenCount(jsonString);
+		const toonTokens = estimateTokenCount(toonOutput);
+		const saved = jsonTokens - toonTokens;
+		const reduction = jsonTokens > 0 ? saved / jsonTokens : 0;
+
+		tokenMetrics = {
+			json: jsonTokens,
+			toon: toonTokens,
+			saved,
+			reduction: Math.round(reduction * 10000) / 10000, // Round to 4 decimal places
 		};
-
-		const encoder = new ToonEncoder(options);
-		return encoder.encode(data);
 	}
+
+	return { toon: toonOutput, tokenMetrics };
+}
+
+/**
+ * Estimate token count using a simple heuristic
+ * Approximates OpenAI's tokenization: ~4 characters per token on average
+ */
+function estimateTokenCount(text: string): number {
+	// Simple estimation: count characters and divide by 4
+	// This is a rough approximation of tokenization
+	return Math.ceil(text.length / 4);
+}
 
 /**
  * Convert TOON to JSON
