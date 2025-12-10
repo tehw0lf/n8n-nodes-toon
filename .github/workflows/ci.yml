@@ -27,6 +27,9 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: install latest npm
+        run: npm install -g npm@latest
+
       - name: install dependencies for n8n release
         run: npm ci
 
@@ -41,7 +44,6 @@ jobs:
 
           npm run release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_AUTHOR_NAME: ${{ github.event.head_commit.author.name || 'github-actions[bot]' }}
           COMMIT_AUTHOR_EMAIL: ${{ github.event.head_commit.author.email || 'github-actions[bot]@users.noreply.github.com' }}
