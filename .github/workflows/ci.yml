@@ -7,43 +7,21 @@ on:
   pull_request:
 
 jobs:
-  publish_npm_libraries:
-    name: publish npm libraries
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  build:
+    name: external workflow
+    uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
     permissions:
-      actions: read
+      actions: write
       contents: write
-      packages: read
+      packages: write
       id-token: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: install latest npm
-        run: npm install -g npm@latest
-
-      - name: install dependencies for n8n release
-        run: npm ci
-
-      - name: publish n8n node
-        run: |
-          echo "::notice::[NPM] Publishing n8n node"
-
-          # Configure git with the commit author's information from env (set safely below)
-          echo "::notice::[GIT] Configuring git as: $COMMIT_AUTHOR_NAME <$COMMIT_AUTHOR_EMAIL>"
-          git config user.name "$COMMIT_AUTHOR_NAME"
-          git config user.email "$COMMIT_AUTHOR_EMAIL"
-
-          npm run release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMIT_AUTHOR_NAME: ${{ github.event.head_commit.author.name || 'github-actions[bot]' }}
-          COMMIT_AUTHOR_EMAIL: ${{ github.event.head_commit.author.email || 'github-actions[bot]@users.noreply.github.com' }}
+    with:
+      tool: "npm"
+      lint: "run lint"
+      test: "run test"
+      build_branch: "run build"
+      build_main: "run build"
+      event_name: ${{ github.event_name }}
+      artifact_path: "dist"
+      library_path: "dist"
+      publish_github_release: "false"
