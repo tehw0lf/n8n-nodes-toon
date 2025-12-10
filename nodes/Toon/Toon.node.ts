@@ -52,120 +52,6 @@ export class Toon implements INodeType {
         default: 'jsonToToon',
       },
 
-      // Encoding options (for jsonToToon)
-      {
-        displayName: 'Indent Size',
-        name: 'indent',
-        type: 'number',
-        default: 2,
-        description: 'Number of spaces per indentation level',
-        displayOptions: {
-          show: {
-            operation: ['jsonToToon'],
-          },
-        },
-      },
-      {
-        displayName: 'Delimiter',
-        name: 'delimiter',
-        type: 'options',
-        options: [
-          { name: 'Comma (,)', value: 'comma' },
-          { name: 'Tab', value: 'tab' },
-          { name: 'Pipe (|)', value: 'pipe' },
-        ],
-        default: 'comma',
-        description: 'Delimiter for array values',
-        displayOptions: {
-          show: {
-            operation: ['jsonToToon'],
-          },
-        },
-      },
-      {
-        displayName: 'Key Folding',
-        name: 'keyFolding',
-        type: 'options',
-        options: [
-          { name: 'Off', value: 'off' },
-          { name: 'Safe', value: 'safe' },
-        ],
-        default: 'off',
-        description: 'Collapse single-key object chains into dotted paths (e.g., "a.b.c")',
-        displayOptions: {
-          show: {
-            operation: ['jsonToToon'],
-          },
-        },
-      },
-      {
-        displayName: 'Flatten Depth',
-        name: 'flattenDepth',
-        type: 'number',
-        default: 999,
-        description: 'Maximum number of segments to fold (use 999 for unlimited)',
-        displayOptions: {
-          show: {
-            operation: ['jsonToToon'],
-            keyFolding: ['safe'],
-          },
-        },
-      },
-      {
-        displayName: 'Include Token Metrics',
-        name: 'includeTokenMetrics',
-        type: 'boolean',
-        default: false,
-        description: 'Whether to include token count comparison metrics in the output',
-        displayOptions: {
-          show: {
-            operation: ['jsonToToon'],
-          },
-        },
-      },
-
-      // Decoding options (for toonToJson)
-      {
-        displayName: 'Expected Indent Size',
-        name: 'indent',
-        type: 'number',
-        default: 2,
-        description: 'Expected indentation size for validation',
-        displayOptions: {
-          show: {
-            operation: ['toonToJson'],
-          },
-        },
-      },
-      {
-        displayName: 'Strict Mode',
-        name: 'strict',
-        type: 'boolean',
-        default: true,
-        description: 'Whether to enforce array counts, indentation multiples, and validation rules',
-        displayOptions: {
-          show: {
-            operation: ['toonToJson'],
-          },
-        },
-      },
-      {
-        displayName: 'Expand Paths',
-        name: 'expandPaths',
-        type: 'options',
-        options: [
-          { name: 'Off', value: 'off' },
-          { name: 'Safe', value: 'safe' },
-        ],
-        default: 'off',
-        description: 'Split dotted keys into nested objects (e.g., "a.b.c" → {a: {b: {c: ...}}})',
-        displayOptions: {
-          show: {
-            operation: ['toonToJson'],
-          },
-        },
-      },
-
       // Input/Output configuration
       {
         displayName: 'Input Data',
@@ -181,6 +67,112 @@ export class Toon implements INodeType {
         type: 'string',
         default: 'data',
         description: 'Field name to store the converted output',
+      },
+
+      // Additional Options for jsonToToon
+      {
+        displayName: 'Additional Options',
+        name: 'additionalOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        displayOptions: {
+          show: {
+            operation: ['jsonToToon'],
+          },
+        },
+        options: [
+          {
+            displayName: 'Delimiter',
+            name: 'delimiter',
+            type: 'options',
+            options: [
+              { name: 'Comma (,)', value: 'comma' },
+              { name: 'Tab', value: 'tab' },
+              { name: 'Pipe (|)', value: 'pipe' },
+            ],
+            default: 'comma',
+            description: 'Delimiter for array values',
+          },
+          {
+            displayName: 'Flatten Depth',
+            name: 'flattenDepth',
+            type: 'number',
+            default: 999,
+            description: 'Maximum number of segments to fold (use 999 for unlimited)',
+            displayOptions: {
+              show: {
+                keyFolding: ['safe'],
+              },
+            },
+          },
+          {
+            displayName: 'Include Token Metrics',
+            name: 'includeTokenMetrics',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to include token count comparison metrics in the output',
+          },
+          {
+            displayName: 'Indent Size',
+            name: 'indent',
+            type: 'number',
+            default: 2,
+            description: 'Number of spaces per indentation level',
+          },
+          {
+            displayName: 'Key Folding',
+            name: 'keyFolding',
+            type: 'options',
+            options: [
+              { name: 'Off', value: 'off' },
+              { name: 'Safe', value: 'safe' },
+            ],
+            default: 'off',
+            description: 'Collapse single-key object chains into dotted paths (e.g., "a.b.c")',
+          },
+        ],
+      },
+
+      // Additional Options for toonToJson
+      {
+        displayName: 'Additional Options',
+        name: 'additionalOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        displayOptions: {
+          show: {
+            operation: ['toonToJson'],
+          },
+        },
+        options: [
+          {
+            displayName: 'Expand Paths',
+            name: 'expandPaths',
+            type: 'options',
+            options: [
+              { name: 'Off', value: 'off' },
+              { name: 'Safe', value: 'safe' },
+            ],
+            default: 'off',
+            description: 'Split dotted keys into nested objects (e.g., "a.b.c" → {a: {b: {c: ...}}})',
+          },
+          {
+            displayName: 'Expected Indent Size',
+            name: 'indent',
+            type: 'number',
+            default: 2,
+            description: 'Expected indentation size for validation',
+          },
+          {
+            displayName: 'Strict Mode',
+            name: 'strict',
+            type: 'boolean',
+            default: true,
+            description: 'Whether to enforce array counts, indentation multiples, and validation rules',
+          },
+        ],
       },
     ],
     usableAsTool: true,
@@ -302,15 +294,16 @@ function convertJsonToToon(
   data: unknown,
   itemIndex: number,
 ): { toon: string; tokenMetrics?: IDataObject } {
-  const indent = this.getNodeParameter('indent', itemIndex) as number;
-  const delimiterOption = this.getNodeParameter('delimiter', itemIndex) as
-    | 'comma'
-    | 'tab'
-    | 'pipe';
-  const keyFolding = this.getNodeParameter('keyFolding', itemIndex) as 'off' | 'safe';
+  // Get additional options collection
+  const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex, {}) as IDataObject;
+
+  // Extract options with defaults
+  const indent = (additionalOptions.indent as number) ?? 2;
+  const delimiterOption = (additionalOptions.delimiter as 'comma' | 'tab' | 'pipe') ?? 'comma';
+  const keyFolding = (additionalOptions.keyFolding as 'off' | 'safe') ?? 'off';
   const flattenDepth =
-    keyFolding === 'safe' ? (this.getNodeParameter('flattenDepth', itemIndex) as number) : Infinity;
-  const includeTokenMetrics = this.getNodeParameter('includeTokenMetrics', itemIndex) as boolean;
+    keyFolding === 'safe' ? ((additionalOptions.flattenDepth as number) ?? 999) : Infinity;
+  const includeTokenMetrics = (additionalOptions.includeTokenMetrics as boolean) ?? false;
 
   const options: EncoderOptions = {
     indent,
@@ -364,9 +357,13 @@ function convertToonToJson(this: IExecuteFunctions, toonText: string, itemIndex:
       );
     }
 
-    const indent = this.getNodeParameter('indent', itemIndex) as number;
-    const strict = this.getNodeParameter('strict', itemIndex) as boolean;
-    const expandPaths = this.getNodeParameter('expandPaths', itemIndex) as 'off' | 'safe';
+    // Get additional options collection
+    const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex, {}) as IDataObject;
+
+    // Extract options with defaults
+    const indent = (additionalOptions.indent as number) ?? 2;
+    const strict = (additionalOptions.strict as boolean) ?? true;
+    const expandPaths = (additionalOptions.expandPaths as 'off' | 'safe') ?? 'off';
 
     const options: DecoderOptions = {
       indent,

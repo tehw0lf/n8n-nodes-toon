@@ -1,4 +1,4 @@
-# n8n-nodes-toon Example Workflows
+# @tehw0lf/n8n-nodes-toon Example Workflows
 
 This directory contains example n8n workflows demonstrating various use cases for the TOON node.
 

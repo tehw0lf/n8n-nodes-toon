@@ -1,4 +1,4 @@
-# n8n-nodes-toon Development Guide
+# Development Guide
 
 ## Project Overview
 

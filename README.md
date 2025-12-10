@@ -1,6 +1,6 @@
-# n8n-nodes-toon
+# @tehw0lf/n8n-nodes-toon
 
-[![npm version](https://img.shields.io/npm/v/n8n-nodes-toon.svg)](https://www.npmjs.com/package/n8n-nodes-toon)
+[![npm version](https://img.shields.io/npm/v/@tehw0lf/n8n-nodes-toon.svg)](https://www.npmjs.com/package/@tehw0lf/n8n-nodes-toon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This is an n8n community node that provides bidirectional conversion between **TOON (Token-Oriented Object Notation)** and JSON formats. TOON is a line-oriented, indentation-based format optimized for LLM prompts and structured data interchange.
@@ -64,7 +64,7 @@ Follow the [n8n community nodes installation guide](https://docs.n8n.io/integrat
 ### npm
 
 ```bash
-npm install n8n-nodes-toon
+npm install @tehw0lf/n8n-nodes-toon
 ```
 
 ### n8n Cloud
@@ -73,7 +73,7 @@ In n8n Cloud or self-hosted n8n (v0.200+):
 
 1. Go to **Settings** → **Community Nodes**
 2. Select **Install**
-3. Enter `n8n-nodes-toon` and agree to the risks
+3. Enter `@tehw0lf/n8n-nodes-toon` and agree to the risks
 4. Click **Install**
 
 The TOON node will appear in your node palette under the **Transform** category.
