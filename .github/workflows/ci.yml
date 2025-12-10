@@ -38,7 +38,7 @@ jobs:
           git config user.name "$COMMIT_AUTHOR_NAME"
           git config user.email "$COMMIT_AUTHOR_EMAIL"
 
-          n8n-node release
+          npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_AUTHOR_NAME: ${{ github.event.head_commit.author.name || 'github-actions[bot]' }}
