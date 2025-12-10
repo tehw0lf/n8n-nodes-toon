@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
-          cache: npm"
+          cache: npm
           cache-dependency-path: |
             ./package-lock.json
             ./yarn.lock
