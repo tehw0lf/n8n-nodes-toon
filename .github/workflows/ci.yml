@@ -26,9 +26,6 @@ jobs:
         with:
           node-version: "20"
 
-      - name: install @n8n/node-cli
-        run: npm install -g @n8n/node-cli
-
       - name: install dependencies for n8n release
         run: npm ci
 
