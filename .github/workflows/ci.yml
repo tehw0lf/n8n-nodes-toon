@@ -15,6 +15,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
+      security-events: write
     with:
       tool: "npm"
       lint: "run lint"
