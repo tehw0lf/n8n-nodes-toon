@@ -12,6 +12,7 @@ jobs:
     uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
     permissions:
       actions: write
+      attestations: write
       contents: write
       packages: write
       id-token: write
