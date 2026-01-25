@@ -29,6 +29,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  actions: read
 
 jobs:
   # Scan source code for security vulnerabilities
@@ -38,6 +39,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
     with:
       tool: "npm"
       semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
@@ -76,6 +78,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
     with:
       tool: "npm"
       artifact_path: "dist"
