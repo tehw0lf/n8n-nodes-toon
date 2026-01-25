@@ -45,8 +45,8 @@ jobs:
         id: local-version
         run: |
           # Extract version from SPEC.md
-          VERSION=$(grep -m1 "^**Version:**" SPEC.md | sed 's/^**Version:** //')
-          DATE=$(grep -m1 "^**Date:**" SPEC.md | sed 's/^**Date:** //')
+          VERSION=$(grep -m1 "^**Version:**" SPEC.md | sed 's/^\*\*Version:\*\* //')
+          DATE=$(grep -m1 "^**Date:**" SPEC.md | sed 's/^\*\*Date:\*\* //')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "date=${DATE}" >> "$GITHUB_OUTPUT"
           echo "Local TOON spec version: ${VERSION} (${DATE})"
@@ -58,8 +58,8 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/toon-format/spec/main/SPEC.md -o /tmp/upstream-spec.md
 
           # Extract version from upstream spec
-          VERSION=$(grep -m1 "^**Version:**" /tmp/upstream-spec.md | sed 's/^**Version:** //')
-          DATE=$(grep -m1 "^**Date:**" /tmp/upstream-spec.md | sed 's/^**Date:** //')
+          VERSION=$(grep -m1 "^**Version:**" /tmp/upstream-spec.md | sed 's/^\*\*Version:\*\* //')
+          DATE=$(grep -m1 "^**Date:**" /tmp/upstream-spec.md | sed 's/^\*\*Date:\*\* //')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "date=${DATE}" >> "$GITHUB_OUTPUT"
           echo "Upstream TOON spec version: ${VERSION} (${DATE})"
