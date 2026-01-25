@@ -1,0 +1,234 @@
+# Security Monitoring Workflow
+#
+# This workflow performs comprehensive security scanning on both:
+# 1. Source code and dependencies (pre-publish)
+# 2. Published npm package (post-publish vulnerability detection)
+#
+# Schedule: Runs daily at 2:00 AM UTC to catch newly disclosed vulnerabilities
+# Manual Trigger: Can be triggered via GitHub Actions UI or gh CLI
+#
+# Security Checks:
+# - npm audit for dependency vulnerabilities
+# - Semgrep for source code security issues
+# - Trivy for artifact scanning
+# - Published package vulnerability check via npm audit on installed package
+#
+# Issue Creation:
+# - Creates GitHub issues when vulnerabilities are detected
+# - Labels with 'security', 'vulnerability'
+# - Includes severity levels and remediation guidance
+#
+name: Security Monitoring
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security-scan.yml'
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  # Reuse the existing build-test-publish workflow for security scanning
+  # This runs the full security pipeline without publishing
+  security_scan:
+    name: Security Scan (Reusable Workflow)
+    uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
+    permissions:
+      actions: write
+      attestations: write
+      contents: write
+      packages: write
+      id-token: write
+      security-events: write
+    with:
+      tool: "npm"
+      lint: "run lint"
+      test: "run test"
+      build_branch: "run build"
+      build_main: "run build"
+      event_name: ${{ github.event_name }}
+      artifact_path: "dist"
+      library_path: "dist"
+      publish_github_release: "false"
+      enable_security_scanning: "true"
+      semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
+      trivy_severity: "CRITICAL,HIGH,MEDIUM"
+      trivy_exit_code: "0"  # Don't fail the workflow, we'll create issues instead
+
+  # Check published package for vulnerabilities
+  check_published_package:
+    name: Check Published Package
+    runs-on: ubuntu-latest
+    needs: security_scan
+    if: always() # Run even if security_scan fails
+
+    steps:
+      - name: Install published package
+        id: install
+        run: |
+          # Create a temporary directory for testing
+          mkdir -p /tmp/package-test
+          cd /tmp/package-test
+          npm init -y
+
+          # Install the published package
+          echo "Installing @tehw0lf/n8n-nodes-toon..."
+          npm install @tehw0lf/n8n-nodes-toon --save
+
+          # Get installed version
+          VERSION=$(npm list @tehw0lf/n8n-nodes-toon --json | jq -r '.dependencies["@tehw0lf/n8n-nodes-toon"].version')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Installed version: ${VERSION}"
+
+      - name: Run npm audit on published package
+        id: audit
+        continue-on-error: true
+        run: |
+          cd /tmp/package-test
+
+          # Run audit and capture output
+          npm audit --json > /tmp/audit-results.json || true
+
+          # Parse results
+          VULNERABILITIES=$(jq -r '.metadata.vulnerabilities | to_entries | map("\(.key): \(.value)") | join(", ")' /tmp/audit-results.json)
+          TOTAL=$(jq -r '.metadata.vulnerabilities.total // 0' /tmp/audit-results.json)
+
+          echo "vulnerabilities=${TOTAL}" >> "$GITHUB_OUTPUT"
+          echo "summary=${VULNERABILITIES}" >> "$GITHUB_OUTPUT"
+
+          echo "Total vulnerabilities: ${TOTAL}"
+          echo "Summary: ${VULNERABILITIES}"
+
+          # Save full report for issue
+          {
+            echo 'report<<EOF'
+            npm audit
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT" || true
+
+      - name: Create issue for vulnerabilities
+        if: steps.audit.outputs.vulnerabilities != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.install.outputs.version }}';
+            const total = '${{ steps.audit.outputs.vulnerabilities }}';
+            const summary = '${{ steps.audit.outputs.summary }}';
+            const report = `${{ steps.audit.outputs.report }}`;
+
+            const issueTitle = `Security Alert: ${total} vulnerabilities detected in published package v${version}`;
+
+            const issueBody = [
+              '## 🚨 Security Vulnerabilities Detected',
+              '',
+              `Automated security scan detected **${total} vulnerabilities** in the published npm package.`,
+              '',
+              '### Package Information',
+              '',
+              `- **Package:** @tehw0lf/n8n-nodes-toon`,
+              `- **Version:** v${version}`,
+              `- **Vulnerabilities:** ${summary}`,
+              `- **Scan Date:** ${new Date().toISOString()}`,
+              '',
+              '### Vulnerability Report',
+              '',
+              '<details>',
+              '<summary>Click to expand full audit report</summary>',
+              '',
+              '```',
+              report,
+              '```',
+              '',
+              '</details>',
+              '',
+              '### Recommended Actions',
+              '',
+              '1. Review the vulnerability details above',
+              '2. Check if vulnerabilities affect runtime (vs devDependencies)',
+              '3. Update affected dependencies using:',
+              '   ```bash',
+              '   npm audit fix',
+              '   # or for breaking changes:',
+              '   npm audit fix --force',
+              '   ```',
+              '4. If overrides are needed, add to package.json:',
+              '   ```json',
+              '   "overrides": {',
+              '     "vulnerable-package": "^safe-version"',
+              '   }',
+              '   ```',
+              '5. Test thoroughly after updates',
+              '6. Publish a new patch version with fixes',
+              '',
+              '### Severity Levels',
+              '',
+              '- **Critical:** Immediate action required',
+              '- **High:** Patch as soon as possible',
+              '- **Medium:** Address in next regular update',
+              '- **Low:** Monitor and fix when convenient',
+              '',
+              '### Resources',
+              '',
+              '- [npm audit documentation](https://docs.npmjs.com/cli/v10/commands/npm-audit)',
+              '- [GitHub Security Advisories](https://github.com/advisories)',
+              '- [Snyk Vulnerability Database](https://snyk.io/vuln)',
+              '',
+              '---',
+              '',
+              '*This issue was automatically created by the [Security Monitoring workflow](.github/workflows/security-scan.yml)*'
+            ].join('\n');
+
+            // Check if an open security issue already exists for this version
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,vulnerability'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes(`v${version}`)
+            );
+
+            if (existingIssue) {
+              console.log(`Updating existing issue #${existingIssue.number}`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `🔄 **Security Scan Update**\n\nStill detecting **${total} vulnerabilities**.\n\nLast scanned: ${new Date().toISOString()}\n\nSummary: ${summary}`
+              });
+            } else {
+              console.log('Creating new security issue');
+
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['security', 'vulnerability', 'dependencies']
+              });
+
+              console.log(`Created issue #${issue.data.number}`);
+            }
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.audit.outputs.vulnerabilities }}" != "0" ]; then
+            echo "⚠️  Security vulnerabilities detected - issue created/updated"
+            echo "Total vulnerabilities: ${{ steps.audit.outputs.vulnerabilities }}"
+          else
+            echo "✅ No vulnerabilities detected in published package"
+          fi

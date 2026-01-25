@@ -163,7 +163,9 @@ All errors integrate with n8n's `NodeOperationError` for proper workflow error h
 5. Ensure all tests pass and coverage remains high
 6. Submit a pull request
 
-## Specification Monitoring
+## Automated Monitoring Workflows
+
+### Specification Monitoring
 
 An automated GitHub Actions workflow monitors the official TOON specification for updates:
 
@@ -184,6 +186,36 @@ An automated GitHub Actions workflow monitors the official TOON specification fo
 # Or via gh CLI:
 gh workflow run monitor-spec.yml
 ```
+
+### Security Monitoring
+
+An automated workflow performs comprehensive security scanning:
+
+**Workflow:** `.github/workflows/security-scan.yml`
+
+**Schedule:** Daily at 2:00 AM UTC (also on dependency changes)
+
+**Security Checks:**
+- **Source Code:** Semgrep analysis (OWASP Top 10, security-audit, CI rules)
+- **Dependencies:** npm audit for known vulnerabilities
+- **Artifacts:** Trivy scanning on built packages
+- **Published Package:** npm audit on the live published package
+
+**Behavior:**
+- Reuses the comprehensive `build-test-publish` workflow for security scanning
+- Checks the published npm package for newly disclosed vulnerabilities
+- Creates GitHub issues with severity levels and remediation guidance
+- Updates existing security issues instead of creating duplicates
+- Non-blocking (exit code 0) to ensure full scan completion
+
+**Manual Trigger:**
+```bash
+# Via GitHub UI: Actions → Security Monitoring → Run workflow
+# Or via gh CLI:
+gh workflow run security-scan.yml
+```
+
+**Issue Labels:** `security`, `vulnerability`, `dependencies`
 
 ## Resources
 

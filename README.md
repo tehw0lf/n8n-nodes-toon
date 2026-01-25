@@ -422,9 +422,13 @@ This node has **zero production dependencies**:
 
 **Solution:** This is expected — TOON preserves semantic meaning, not exact formatting.
 
-## Specification Monitoring
+## Automated Monitoring
 
-This repository includes an automated workflow that monitors the official TOON specification for updates:
+This repository includes automated workflows for continuous monitoring:
+
+### Specification Monitoring
+
+Monitors the official TOON specification for updates:
 
 - **Frequency:** Checks run every Monday at 9:00 AM UTC
 - **Automatic Detection:** Compares local `SPEC.md` against the upstream repository
@@ -438,6 +442,24 @@ When a specification update is detected, the workflow:
 4. Avoids duplicate issues for the same version
 
 See [`.github/workflows/monitor-spec.yml`](.github/workflows/monitor-spec.yml) for implementation details.
+
+### Security Monitoring
+
+Performs comprehensive security scanning to detect vulnerabilities:
+
+- **Frequency:** Runs daily at 2:00 AM UTC
+- **Source Code Scanning:** Semgrep analysis for security issues (OWASP Top 10, etc.)
+- **Dependency Scanning:** npm audit on dependencies
+- **Published Package Scanning:** Checks the live npm package for newly disclosed vulnerabilities
+- **Automatic Trigger:** Also runs on changes to `package.json` or `package-lock.json`
+
+When vulnerabilities are detected, the workflow:
+1. Creates a labeled issue (`security`, `vulnerability`, `dependencies`)
+2. Includes severity levels and full audit report
+3. Provides remediation guidance with specific commands
+4. Updates existing issues instead of creating duplicates
+
+See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) for implementation details.
 
 ## Resources
 
