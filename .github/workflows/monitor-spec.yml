@@ -47,8 +47,8 @@ jobs:
           # Extract version from SPEC.md
           VERSION=$(grep -m1 "^**Version:**" SPEC.md | sed 's/^**Version:** //')
           DATE=$(grep -m1 "^**Date:**" SPEC.md | sed 's/^**Date:** //')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}" >> "$GITHUB_OUTPUT"
           echo "Local TOON spec version: ${VERSION} (${DATE})"
 
       - name: Fetch latest upstream spec
@@ -60,8 +60,8 @@ jobs:
           # Extract version from upstream spec
           VERSION=$(grep -m1 "^**Version:**" /tmp/upstream-spec.md | sed 's/^**Version:** //')
           DATE=$(grep -m1 "^**Date:**" /tmp/upstream-spec.md | sed 's/^**Date:** //')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}" >> "$GITHUB_OUTPUT"
           echo "Upstream TOON spec version: ${VERSION} (${DATE})"
 
       - name: Compare versions
@@ -77,10 +77,10 @@ jobs:
           echo "  Upstream: ${UPSTREAM_VERSION} (${UPSTREAM_DATE})"
 
           if [ "${LOCAL_VERSION}" != "${UPSTREAM_VERSION}" ] || [ "${LOCAL_DATE}" != "${UPSTREAM_DATE}" ]; then
-            echo "changes_detected=true" >> $GITHUB_OUTPUT
+            echo "changes_detected=true" >> "$GITHUB_OUTPUT"
             echo "Changes detected!"
           else
-            echo "changes_detected=false" >> $GITHUB_OUTPUT
+            echo "changes_detected=false" >> "$GITHUB_OUTPUT"
             echo "No changes detected"
           fi
 
@@ -99,7 +99,7 @@ jobs:
             echo 'diff<<EOF'
             cat /tmp/spec-diff.txt
             echo 'EOF'
-          } >> $GITHUB_OUTPUT
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create issue for spec update
         if: steps.compare.outputs.changes_detected == 'true'
@@ -113,47 +113,49 @@ jobs:
             const diff = `${{ steps.diff.outputs.diff }}`;
 
             const issueTitle = `TOON Specification Update Available: v${upstreamVersion}`;
-            const issueBody = `## 🔔 TOON Specification Update Detected
 
-A new version of the TOON specification is available from the official repository.
-
-### Version Information
-
-- **Current (Local):** v${localVersion} (${localDate})
-- **Latest (Upstream):** v${upstreamVersion} (${upstreamDate})
-
-### Action Required
-
-Please review the changes in the official specification and update our implementation accordingly:
-
-1. Review the upstream specification: https://github.com/toon-format/spec/blob/main/SPEC.md
-2. Update \`SPEC.md\` to match the latest version
-3. Review and update implementation in \`nodes/Toon/\` if needed
-4. Update tests to cover any new features or changes
-5. Update \`README.md\` to reflect the new version
-6. Update \`package.json\` if appropriate
-
-### Diff Summary (first 100 lines)
-
-<details>
-<summary>Click to expand diff</summary>
-
-\`\`\`diff
-${diff}
-\`\`\`
-
-</details>
-
-### Useful Links
-
-- [Official TOON Spec Repository](https://github.com/toon-format/spec)
-- [Latest SPEC.md](https://github.com/toon-format/spec/blob/main/SPEC.md)
-- [TOON Organization](https://github.com/toon-format)
-
----
-
-*This issue was automatically created by the [Monitor TOON Specification workflow](.github/workflows/monitor-spec.yml)*
-`;
+            const issueBody = [
+              '## 🔔 TOON Specification Update Detected',
+              '',
+              'A new version of the TOON specification is available from the official repository.',
+              '',
+              '### Version Information',
+              '',
+              `- **Current (Local):** v${localVersion} (${localDate})`,
+              `- **Latest (Upstream):** v${upstreamVersion} (${upstreamDate})`,
+              '',
+              '### Action Required',
+              '',
+              'Please review the changes in the official specification and update our implementation accordingly:',
+              '',
+              '1. Review the upstream specification: https://github.com/toon-format/spec/blob/main/SPEC.md',
+              '2. Update `SPEC.md` to match the latest version',
+              '3. Review and update implementation in `nodes/Toon/` if needed',
+              '4. Update tests to cover any new features or changes',
+              '5. Update `README.md` to reflect the new version',
+              '6. Update `package.json` if appropriate',
+              '',
+              '### Diff Summary (first 100 lines)',
+              '',
+              '<details>',
+              '<summary>Click to expand diff</summary>',
+              '',
+              '```diff',
+              diff,
+              '```',
+              '',
+              '</details>',
+              '',
+              '### Useful Links',
+              '',
+              '- [Official TOON Spec Repository](https://github.com/toon-format/spec)',
+              '- [Latest SPEC.md](https://github.com/toon-format/spec/blob/main/SPEC.md)',
+              '- [TOON Organization](https://github.com/toon-format)',
+              '',
+              '---',
+              '',
+              '*This issue was automatically created by the [Monitor TOON Specification workflow](.github/workflows/monitor-spec.yml)*'
+            ].join('\n');
 
             // Check if an issue already exists for this version
             const issues = await github.rest.issues.listForRepo({
