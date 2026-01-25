@@ -3,9 +3,7 @@ rules:
   # All dynamic property accesses are protected by utils.isSafeKey() checks
   # which block __proto__, constructor, and prototype keys.
   - id: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
-    severity: INFO
-    options:
-      # Convert to informational only - we have proper validation in place
+    paths:
       exclude:
         - nodes/Toon/ToonDecoder.ts
         - nodes/Toon/ToonEncoder.ts
