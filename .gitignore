@@ -34,6 +34,9 @@ lerna-debug.log*
 .tmp/
 temp/
 
+# Security scan results
+*.sarif
+
 # Claude Code
 .claude/
 
