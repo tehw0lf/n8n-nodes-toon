@@ -360,6 +360,7 @@ export class ToonEncoder {
         break;
       }
       chain.push(nextKey);
+      // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
       current = (current as Record<string, unknown>)[nextKey];
       depth++;
     }
@@ -391,6 +392,7 @@ export class ToonEncoder {
       if (!utils.isSafeKey(keys[0])) {
         return current;
       }
+      // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
       current = (current as Record<string, unknown>)[keys[0]];
     }
     return current;

@@ -1,7 +1,0 @@
-# Exclude prototype pollution warnings - we have explicit validation
-# All dynamic property accesses are protected by utils.isSafeKey() checks
-# which block __proto__, constructor, and prototype keys.
-
-# Rule-specific ignores (format: path:rule-id)
-nodes/Toon/ToonDecoder.ts:javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
-nodes/Toon/ToonEncoder.ts:javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop

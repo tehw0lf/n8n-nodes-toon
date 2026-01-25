@@ -717,6 +717,7 @@ export class ToonDecoder {
         current[segment] = {};
       }
 
+      // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
       current = current[segment] as Record<string, unknown>;
     }
 
