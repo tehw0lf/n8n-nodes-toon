@@ -15,16 +15,16 @@ name: Security Monitoring
 on:
   schedule:
     # Run daily at 2:00 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual triggering
   push:
     branches:
       - main
     paths:
-      - 'package.json'
-      - 'package-lock.json'
-      - 'nodes/**/*.ts'
-      - '.github/workflows/security-scan.yml'
+      - "package.json"
+      - "package-lock.json"
+      - "nodes/**/*.ts"
+      - ".github/workflows/security-scan.yml"
 
 permissions:
   contents: read
