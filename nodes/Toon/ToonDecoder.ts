@@ -697,6 +697,13 @@ export class ToonDecoder {
     for (let i = 0; i < path.length - 1; i++) {
       const segment = path[i];
 
+      // Prevent prototype pollution
+      if (!utils.isSafeKey(segment)) {
+        throw new ToonDecodingError(
+          `Unsafe key detected in path: '${segment}' (potential prototype pollution)`,
+        );
+      }
+
       if (!(segment in current)) {
         current[segment] = {};
       } else if (!utils.isPlainObject(current[segment])) {
@@ -714,6 +721,13 @@ export class ToonDecoder {
     }
 
     const lastSegment = path[path.length - 1];
+
+    // Prevent prototype pollution on final segment
+    if (!utils.isSafeKey(lastSegment)) {
+      throw new ToonDecodingError(
+        `Unsafe key detected in path: '${lastSegment}' (potential prototype pollution)`,
+      );
+    }
 
     if (lastSegment in current && this.options.strict) {
       throw new ToonDecodingError(

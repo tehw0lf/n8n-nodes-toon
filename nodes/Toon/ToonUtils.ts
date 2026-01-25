@@ -313,6 +313,14 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 }
 
 /**
+ * Check if a key is safe for property assignment (not __proto__, constructor, or prototype)
+ * to prevent prototype pollution attacks
+ */
+export function isSafeKey(key: string): boolean {
+  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
+}
+
+/**
  * Check if array contains only primitives (no objects or arrays)
  */
 export function isArrayOfPrimitives(arr: unknown[]): boolean {

@@ -355,6 +355,10 @@ export class ToonEncoder {
       }
 
       const nextKey = keys[0];
+      // Skip unsafe keys to prevent prototype pollution
+      if (!utils.isSafeKey(nextKey)) {
+        break;
+      }
       chain.push(nextKey);
       current = (current as Record<string, unknown>)[nextKey];
       depth++;
@@ -381,6 +385,10 @@ export class ToonEncoder {
       }
       const keys = Object.keys(current);
       if (keys.length !== 1) {
+        return current;
+      }
+      // Skip unsafe keys to prevent prototype pollution
+      if (!utils.isSafeKey(keys[0])) {
         return current;
       }
       current = (current as Record<string, unknown>)[keys[0]];

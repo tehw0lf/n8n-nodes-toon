@@ -552,4 +552,44 @@ flags[3]: true, false, true`;
       expect(result).toEqual({ key1: 'value1', key2: 'value2' });
     });
   });
+
+  describe('prototype pollution protection', () => {
+    it('should reject __proto__ in path expansion', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
+      const toon = '__proto__.polluted: "bad"';
+      expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decoder.decode(toon)).toThrow(/prototype pollution/);
+    });
+
+    it('should reject constructor in path expansion', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
+      const toon = 'constructor.polluted: "bad"';
+      expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decoder.decode(toon)).toThrow(/prototype pollution/);
+    });
+
+    it('should reject prototype in path expansion', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
+      const toon = 'prototype.polluted: "bad"';
+      expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decoder.decode(toon)).toThrow(/prototype pollution/);
+    });
+
+    it('should reject nested dangerous keys', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
+      const toon = 'user.__proto__.isAdmin: true';
+      expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decoder.decode(toon)).toThrow(/prototype pollution/);
+    });
+
+    it('should allow safe keys with similar names', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
+      const toon = 'proto_field: "safe"\nmy_constructor: "also safe"';
+      const result = decoder.decode(toon);
+      expect(result).toEqual({
+        proto_field: 'safe',
+        my_constructor: 'also safe',
+      });
+    });
+  });
 });

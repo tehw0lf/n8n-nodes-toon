@@ -131,4 +131,20 @@ describe('ToonUtils', () => {
       expect(utils.indent(2, 4)).toBe('        ');
     });
   });
+
+  describe('isSafeKey', () => {
+    it('should reject prototype pollution keys', () => {
+      expect(utils.isSafeKey('__proto__')).toBe(false);
+      expect(utils.isSafeKey('constructor')).toBe(false);
+      expect(utils.isSafeKey('prototype')).toBe(false);
+    });
+
+    it('should accept safe keys', () => {
+      expect(utils.isSafeKey('name')).toBe(true);
+      expect(utils.isSafeKey('user')).toBe(true);
+      expect(utils.isSafeKey('data')).toBe(true);
+      expect(utils.isSafeKey('_private')).toBe(true);
+      expect(utils.isSafeKey('value123')).toBe(true);
+    });
+  });
 });
