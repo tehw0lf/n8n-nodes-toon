@@ -1,22 +1,14 @@
 # Security Monitoring Workflow
 #
-# This workflow performs comprehensive security scanning using the centralized
-# reusable workflow infrastructure.
+# This workflow performs security scanning using only the security-specific
+# reusable workflows, without building or publishing.
 #
 # Schedule: Runs daily at 2:00 AM UTC to catch newly disclosed vulnerabilities
 # Manual Trigger: Can be triggered via GitHub Actions UI or gh CLI
 #
-# Security Checks (via reusable workflow):
-# - Semgrep for source code security issues (OWASP Top 10, security-audit, CI)
-# - npm audit for dependency vulnerabilities
-# - Trivy for artifact scanning
-# - Post-publish verification (when applicable)
-#
-# The reusable workflow handles:
-# - SARIF uploads to GitHub Security tab
-# - Build artifact scanning
-# - Dependency vulnerability detection
-# - Issue creation via existing mechanisms
+# Security Checks:
+# - Source code scanning: Semgrep (OWASP Top 10, security-audit, CI), npm audit
+# - Artifact scanning: Trivy on dist/ artifacts (requires prior build)
 #
 name: Security Monitoring
 
@@ -31,38 +23,64 @@ on:
     paths:
       - 'package.json'
       - 'package-lock.json'
+      - 'nodes/**/*.ts'
       - '.github/workflows/security-scan.yml'
 
 permissions:
   contents: read
   security-events: write
-  issues: write
 
 jobs:
-  # Use the centralized reusable workflow for comprehensive security scanning
-  # This includes: Semgrep, npm audit, Trivy, and post-publish verification
-  security_scan:
-    name: Security Scan
-    uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
+  # Scan source code for security vulnerabilities
+  scan_source:
+    name: Scan Source Code
+    uses: tehw0lf/workflows/.github/workflows/security-scan-source.yml@main
     permissions:
-      actions: write
-      attestations: write
-      contents: write
-      packages: write
-      id-token: write
+      contents: read
       security-events: write
     with:
       tool: "npm"
-      lint: "run lint"
-      test: "run test"
-      build_branch: "run build"
-      build_main: "run build"
-      event_name: ${{ github.event_name }}
-      artifact_path: "dist"
-      library_path: "dist"
-      publish_github_release: "false"
-      enable_security_scanning: "true"
       semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
-      trivy_severity: "CRITICAL,HIGH,MEDIUM"
-      trivy_exit_code: "0"  # Don't fail workflow - allow full scan to complete
-      cyclonedx_ignore_npm_errors: true  # Handle package override validation
+
+  # Build artifacts for scanning
+  # Note: Required because artifact scanning needs built files
+  build_for_scanning:
+    name: Build Artifacts
+    runs-on: ubuntu-latest
+    needs: scan_source
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload artifacts for scanning
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # Scan built artifacts for vulnerabilities
+  scan_artifacts:
+    name: Scan Artifacts
+    needs: build_for_scanning
+    uses: tehw0lf/workflows/.github/workflows/security-scan-artifacts.yml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      tool: "npm"
+      artifact_path: "dist"
