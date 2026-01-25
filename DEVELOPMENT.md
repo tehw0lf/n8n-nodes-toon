@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v2.0** (see `SPEC.md`) with **zero external production dependencies**.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.0** (see `SPEC.md`) with **zero external production dependencies**.
 
 ## Development Setup
 
@@ -163,9 +163,32 @@ All errors integrate with n8n's `NodeOperationError` for proper workflow error h
 5. Ensure all tests pass and coverage remains high
 6. Submit a pull request
 
+## Specification Monitoring
+
+An automated GitHub Actions workflow monitors the official TOON specification for updates:
+
+**Workflow:** `.github/workflows/monitor-spec.yml`
+
+**Schedule:** Every Monday at 9:00 AM UTC (can be triggered manually)
+
+**Behavior:**
+- Fetches the latest `SPEC.md` from https://github.com/toon-format/spec
+- Compares version and date against our local copy
+- Opens a GitHub issue if changes are detected (with diff summary)
+- Prevents duplicate issues for the same version
+- Adds reminder comments to existing open issues
+
+**Manual Trigger:**
+```bash
+# Via GitHub UI: Actions → Monitor TOON Specification → Run workflow
+# Or via gh CLI:
+gh workflow run monitor-spec.yml
+```
+
 ## Resources
 
 - **TOON Specification:** See `SPEC.md` in the repository root
+- **Official Spec Repository:** https://github.com/toon-format/spec
 - **n8n Documentation:** https://docs.n8n.io/integrations/creating-nodes/
 - **Project Repository:** https://github.com/tehw0lf/n8n-nodes-toon
 

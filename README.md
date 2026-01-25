@@ -422,6 +422,23 @@ This node has **zero production dependencies**:
 
 **Solution:** This is expected — TOON preserves semantic meaning, not exact formatting.
 
+## Specification Monitoring
+
+This repository includes an automated workflow that monitors the official TOON specification for updates:
+
+- **Frequency:** Checks run every Monday at 9:00 AM UTC
+- **Automatic Detection:** Compares local `SPEC.md` against the upstream repository
+- **Issue Creation:** Automatically opens a GitHub issue when updates are detected
+- **Manual Trigger:** Can be triggered manually via GitHub Actions
+
+When a specification update is detected, the workflow:
+1. Creates a labeled issue (`spec-update`, `enhancement`) with version details
+2. Includes a diff summary showing the changes
+3. Provides links to the official specification
+4. Avoids duplicate issues for the same version
+
+See [`.github/workflows/monitor-spec.yml`](.github/workflows/monitor-spec.yml) for implementation details.
+
 ## Resources
 
 - **TOON Specification v3.0:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
