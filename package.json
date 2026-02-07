@@ -49,8 +49,8 @@
 		]
 	},
 	"devDependencies": {
-		"@n8n/node-cli": "0.18.0",
-		"@release-it/conventional-changelog": "10.0.4",
+		"@n8n/node-cli": "0.19.0",
+		"@release-it/conventional-changelog": "10.0.5",
 		"@types/jest": "30.0.0",
 		"eslint": "9.39.2",
 		"jest": "30.2.0",
@@ -60,11 +60,6 @@
 		"typescript": "5.9.3"
 	},
 	"peerDependencies": {
-		"n8n-workflow": "*"
-	},
-	"overrides": {
-		"form-data": "^4.0.4",
-		"lodash": "^4.17.23",
-		"eslint": "9.39.2"
+		"n8n-workflow": "^2.7.0"
 	}
 }
