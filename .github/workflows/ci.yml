@@ -23,7 +23,6 @@ jobs:
       test: "run test"
       build_branch: "run build"
       build_main: "run build"
-      event_name: ${{ github.event_name }}
       artifact_path: "dist"
       library_path: "dist"
       publish_github_release: "false"
