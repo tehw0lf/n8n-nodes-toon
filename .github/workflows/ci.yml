@@ -26,3 +26,4 @@ jobs:
       artifact_path: "dist"
       library_path: "dist"
       publish_github_release: "false"
+      npm_audit_omit_dev: true
