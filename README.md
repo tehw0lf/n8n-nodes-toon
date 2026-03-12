@@ -431,7 +431,7 @@ This repository includes automated workflows for continuous monitoring:
 Monitors the official TOON specification for updates:
 
 - **Frequency:** Checks run every Monday at 9:00 AM UTC
-- **Automatic Detection:** Compares local `SPEC.md` against the upstream repository
+- **Automatic Detection:** Compares `toonSpecVersion` in `package.json` against the upstream GitHub Releases API
 - **Issue Creation:** Automatically opens a GitHub issue when updates are detected
 - **Manual Trigger:** Can be triggered manually via GitHub Actions
 

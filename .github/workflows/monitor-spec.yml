@@ -44,39 +44,38 @@ jobs:
       - name: Fetch current local spec version
         id: local-version
         run: |
-          # Extract version from SPEC.md
-          VERSION=$(grep -m1 "^**Version:**" SPEC.md | sed 's/^\*\*Version:\*\* //')
-          DATE=$(grep -m1 "^**Date:**" SPEC.md | sed 's/^\*\*Date:\*\* //')
+          # Extract implemented spec version from package.json (toonSpecVersion field)
+          VERSION=$(node -p "require('./package.json').toonSpecVersion")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "date=${DATE}" >> "$GITHUB_OUTPUT"
-          echo "Local TOON spec version: ${VERSION} (${DATE})"
+          echo "Local TOON spec version: ${VERSION}"
 
       - name: Fetch latest upstream spec
         id: upstream-version
         run: |
-          # Download the latest SPEC.md from the official repository
-          curl -sSL https://raw.githubusercontent.com/toon-format/spec/main/SPEC.md -o /tmp/upstream-spec.md
-
-          # Extract version from upstream spec
-          VERSION=$(grep -m1 "^**Version:**" /tmp/upstream-spec.md | sed 's/^\*\*Version:\*\* //')
-          DATE=$(grep -m1 "^**Date:**" /tmp/upstream-spec.md | sed 's/^\*\*Date:\*\* //')
+          # Fetch the latest release version from GitHub Releases API (more reliable than README/SPEC.md)
+          RELEASE_JSON=$(curl -sSL "https://api.github.com/repos/toon-format/spec/releases/latest")
+          VERSION=$(echo "${RELEASE_JSON}" | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/')
+          DATE=$(echo "${RELEASE_JSON}" | grep -m1 '"published_at"' | sed 's/.*"published_at": *"\([0-9-]*\).*/\1/')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "date=${DATE}" >> "$GITHUB_OUTPUT"
           echo "Upstream TOON spec version: ${VERSION} (${DATE})"
+
+          # Also download the latest SPEC.md from the release tag for diffing
+          curl -sSL "https://raw.githubusercontent.com/toon-format/spec/v${VERSION}/SPEC.md" -o /tmp/upstream-spec.md \
+            || curl -sSL "https://raw.githubusercontent.com/toon-format/spec/main/SPEC.md" -o /tmp/upstream-spec.md
 
       - name: Compare versions
         id: compare
         run: |
           LOCAL_VERSION="${{ steps.local-version.outputs.version }}"
-          LOCAL_DATE="${{ steps.local-version.outputs.date }}"
           UPSTREAM_VERSION="${{ steps.upstream-version.outputs.version }}"
           UPSTREAM_DATE="${{ steps.upstream-version.outputs.date }}"
 
           echo "Comparing versions:"
-          echo "  Local: ${LOCAL_VERSION} (${LOCAL_DATE})"
-          echo "  Upstream: ${UPSTREAM_VERSION} (${UPSTREAM_DATE})"
+          echo "  Local: ${LOCAL_VERSION}"
+          echo "  Upstream: ${UPSTREAM_VERSION} (released ${UPSTREAM_DATE})"
 
-          if [ "${LOCAL_VERSION}" != "${UPSTREAM_VERSION}" ] || [ "${LOCAL_DATE}" != "${UPSTREAM_DATE}" ]; then
+          if [ "${LOCAL_VERSION}" != "${UPSTREAM_VERSION}" ]; then
             echo "changes_detected=true" >> "$GITHUB_OUTPUT"
             echo "Changes detected!"
           else
@@ -107,7 +106,6 @@ jobs:
         with:
           script: |
             const localVersion = '${{ steps.local-version.outputs.version }}';
-            const localDate = '${{ steps.local-version.outputs.date }}';
             const upstreamVersion = '${{ steps.upstream-version.outputs.version }}';
             const upstreamDate = '${{ steps.upstream-version.outputs.date }}';
             const diff = `${{ steps.diff.outputs.diff }}`;
@@ -121,7 +119,7 @@ jobs:
               '',
               '### Version Information',
               '',
-              `- **Current (Local):** v${localVersion} (${localDate})`,
+              `- **Current (Local):** v${localVersion}`,
               `- **Latest (Upstream):** v${upstreamVersion} (${upstreamDate})`,
               '',
               '### Action Required',
