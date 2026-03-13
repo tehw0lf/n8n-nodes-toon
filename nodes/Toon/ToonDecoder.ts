@@ -103,8 +103,8 @@ export class ToonDecoder {
     const firstLine = lines[0].content.trim();
 
     // Check for array header pattern per §6
-    // Only treat as array if it starts with [ (no key before it)
-    if (/^\[\d+[\t|]?\]/.test(firstLine)) {
+    // Only treat as array if it starts with [ (no key before it) and is a valid array header
+    if (/^\[\d+[\t|]?\]/.test(firstLine) && this.isValidArrayHeader(firstLine)) {
       return 'array';
     }
 
@@ -124,7 +124,8 @@ export class ToonDecoder {
     const content = line.content.trim();
 
     // Match pattern: optional_key [length delimiter_symbol] optional_{fields} : optional_values
-    const match = content.match(/^(.*?)\[(\d+)([\t|])?\](?:\{([^}]+)\})?:(.*)$/);
+    // Per §9.3: only whitespace may appear between ] and { or : — non-whitespace means it's not an array header
+    const match = content.match(/^(.*?)\[(\d+)([\t|])?\]\s*(?:\{([^}]+)\}\s*)?:(.*)$/);
 
     if (!match) {
       throw new ToonDecodingError('Invalid array header format', {
@@ -319,8 +320,8 @@ export class ToonDecoder {
       // Parse element
       const content = line.content.trim();
 
-      // Check if it's a nested array
-      if (/^\[\d+[\t|]?\]/.test(content)) {
+      // Check if it's a nested array (must be a valid array header per §9.3)
+      if (/^\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
         // Save any pending object first
         if (currentObj !== null) {
           values.push(currentObj);
@@ -516,8 +517,8 @@ export class ToonDecoder {
       // Parse key-value pair
       const content = line.content.trim();
 
-      // Check for array
-      if (/\[\d+[\t|]?\]/.test(content)) {
+      // Check for array (must be a valid array header per §9.3 — non-whitespace between ] and {/: → fall-through to key-value)
+      if (/\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
         const headerMatch = content.match(/^(.*?)\[/);
         if (headerMatch && headerMatch[1].trim()) {
           // Named array
@@ -558,8 +559,8 @@ export class ToonDecoder {
         // Nested object or array on next lines
         const nextLine = currentIndex + 1 < lines.length ? lines[currentIndex + 1] : null;
         if (nextLine && !nextLine.isEmpty && nextLine.indent > line.indent) {
-          // Check if next line is array
-          if (/\[\d+[\t|]?\]/.test(nextLine.content.trim())) {
+          // Check if next line is array (must be a valid array header per §9.3)
+          if (/\[\d+[\t|]?\]/.test(nextLine.content.trim()) && this.isValidArrayHeader(nextLine.content.trim())) {
             const array = this.parseArray(lines, currentIndex + 1);
             obj[key] = array;
             currentIndex = this.findNextSiblingIndex(lines, currentIndex + 1, line.indent);
@@ -582,6 +583,14 @@ export class ToonDecoder {
     }
 
     return obj;
+  }
+
+  /**
+   * Check if a line content is a valid array header per §9.3
+   * Only whitespace may appear between ] and { or : — non-whitespace means fall-through to key-value
+   */
+  private isValidArrayHeader(content: string): boolean {
+    return /^(.*?)\[(\d+)([\t|])?\]\s*(?:\{[^}]+\}\s*)?:/.test(content);
   }
 
   /**

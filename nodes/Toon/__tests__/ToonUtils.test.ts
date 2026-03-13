@@ -147,4 +147,28 @@ describe('ToonUtils', () => {
       expect(utils.isSafeKey('value123')).toBe(true);
     });
   });
+
+  describe('isNumericToken', () => {
+    it('should accept normal integers and decimals', () => {
+      expect(utils.isNumericToken('0')).toBe(true);
+      expect(utils.isNumericToken('42')).toBe(true);
+      expect(utils.isNumericToken('-5')).toBe(true);
+      expect(utils.isNumericToken('3.14')).toBe(true);
+      expect(utils.isNumericToken('-2.5')).toBe(true);
+    });
+
+    it('should accept zero integer part with fractional or exponent (per §4 v3.0.3)', () => {
+      expect(utils.isNumericToken('0.5')).toBe(true);
+      expect(utils.isNumericToken('0e1')).toBe(true);
+      expect(utils.isNumericToken('-0.5')).toBe(true);
+      expect(utils.isNumericToken('-0e1')).toBe(true);
+    });
+
+    it('should reject forbidden leading zeros in integer part (per §4 v3.0.3)', () => {
+      expect(utils.isNumericToken('05')).toBe(false);
+      expect(utils.isNumericToken('0001')).toBe(false);
+      expect(utils.isNumericToken('-05')).toBe(false);
+      expect(utils.isNumericToken('-0001')).toBe(false);
+    });
+  });
 });

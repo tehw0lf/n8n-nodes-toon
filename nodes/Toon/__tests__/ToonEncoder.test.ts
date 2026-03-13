@@ -609,4 +609,35 @@ describe('ToonEncoder', () => {
       expect(result).toContain('flags[3]: true, false, true');
     });
   });
+
+  describe('toJSON() hook (§3 v3.0.3)', () => {
+    it('should call toJSON() before normalization', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const obj = {
+        toJSON() {
+          return { name: 'Alice', age: 30 };
+        },
+      };
+      expect(encoder.encode(obj)).toBe('name: Alice\nage: 30');
+    });
+
+    it('should recursively normalize toJSON() result', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const obj = {
+        toJSON() {
+          return { date: new Date('2024-01-01T00:00:00.000Z') };
+        },
+      };
+      // Date has its own toJSON() which returns ISO string (quoted because it contains colons)
+      expect(encoder.encode(obj)).toBe('date: "2024-01-01T00:00:00.000Z"');
+    });
+
+    it('should not infinitely recurse when toJSON() returns itself', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const obj: Record<string, unknown> = { value: 42 };
+      obj['toJSON'] = () => obj; // returns same object
+      // Should fall back to plain object normalization
+      expect(encoder.encode(obj)).toContain('value: 42');
+    });
+  });
 });
