@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.0** (see `SPEC.md`) with **zero external production dependencies**.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.0.3** (see `SPEC.md`) with **zero external production dependencies**.
 
 ## Development Setup
 
@@ -46,7 +46,7 @@ nodes/Toon/
 ├── Toon.node.ts          # Main n8n node implementation
 ├── Toon.node.json        # Node metadata
 ├── toon.svg              # Node icon
-└── __tests__/            # Test suite (161 tests)
+└── __tests__/            # Test suite (179 tests)
     ├── ToonUtils.test.ts
     ├── ToonEncoder.test.ts
     ├── ToonDecoder.test.ts
@@ -81,31 +81,35 @@ nodes/Toon/
 
 ## TOON Specification Compliance
 
-| Spec Section | Feature | Status |
-|-------------|---------|---------|
-| §2 | Canonical number format | ✅ |
-| §3 | Value normalization | ✅ |
-| §4 | Type inference | ✅ |
-| §5 | Root form determination | ✅ |
-| §6 | Array header format | ✅ |
-| §7 | String quoting and escaping | ✅ |
-| §9.3 | Tabular array detection | ✅ |
-| §11 | Delimiter scoping | ✅ |
-| §12 | Indentation rules | ✅ |
-| §13.4 | Key folding/path expansion | ✅ |
-| §14 | Strict mode validation | ✅ |
+Spec version: **3.0.3** — tracked in `package.json` field `toonSpecVersion`.
+
+| Spec Section | Feature | Implementation | Status |
+|---|---|---|---|
+| §2 | Canonical number format (no exponent, no trailing zeros, -0→0) | `ToonUtils.canonicalizeNumber` | ✅ |
+| §3 | Value normalization (undefined/function/symbol/NaN/Infinity→null) | `ToonEncoder.normalizeValue` | ✅ |
+| §3 | `toJSON()` hook honored before normalization *(v3.0.3)* | `ToonEncoder.normalizeValue` | ✅ |
+| §4 | Type inference (boolean, null, number, string) | `ToonUtils.parseToken` | ✅ |
+| §4 | Forbidden leading zeros in integer part treated as strings *(v3.0.3)* | `ToonUtils.isNumericToken` | ✅ |
+| §5 | Root form determination (array / primitive / object) | `ToonDecoder.determineRootForm` | ✅ |
+| §6 | Array header parsing (`[N]`, `[N\t]`, `[N\|]`) | `ToonDecoder.parseArrayHeader` | ✅ |
+| §7.1 | String escaping (`\\`, `\"`, `\n`, `\r`, `\t`) | `ToonUtils.escapeString` / `unescapeString` | ✅ |
+| §7.2 | String quoting rules (reserved words, numbers, delimiters, etc.) | `ToonUtils.needsQuoting` | ✅ |
+| §7.3 | Key quoting rules | `ToonUtils.keyNeedsQuoting` | ✅ |
+| §8 | Key-value parsing | `ToonDecoder.parseObject` | ✅ |
+| §9.3 | Tabular array detection (uniform objects with primitive values) | `ToonUtils.isUniformArray`, `ToonEncoder.encodeTabular` | ✅ |
+| §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3)* | `ToonDecoder.isValidArrayHeader` | ✅ |
+| §11 | Delimiter scoping (comma / tab / pipe) | `ToonDecoder.parseDelimitedTokens`, `ToonEncoder.encodePrimitiveArray` | ✅ |
+| §12 | No trailing newline | `ToonEncoder.encode` | ✅ |
+| §13.4 | Key folding (safe mode, dotted paths) | `ToonEncoder.foldKeys` | ✅ |
+| §13.4 | Path expansion (safe mode) | `ToonDecoder.expandPaths` | ✅ |
+| §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `parseArray`, `parseTabularArray` | ✅ |
+| §14 | Strict mode: invalid array header (non-whitespace between `]` and `{`/`:`) *(v3.0.3)* | `ToonDecoder.isInvalidArrayHeader` | ✅ |
 
 ## Testing
 
 ```bash
-# Run all tests (161 tests)
+# Run all tests (179 tests)
 npm test
-
-# Coverage achieved:
-# - ToonEncoder: 96% (82 tests)
-# - ToonDecoder: 83% (83 tests)
-# - ToonUtils: 76% (24 tests)
-# - Integration: 36 tests
 ```
 
 ## Pre-commit Checklist
