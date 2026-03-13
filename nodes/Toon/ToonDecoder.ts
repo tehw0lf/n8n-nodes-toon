@@ -108,6 +108,14 @@ export class ToonDecoder {
       return 'array';
     }
 
+    // Per §14: non-whitespace between bracket segment and {/: is a decoding error in strict mode
+    if (this.options.strict && this.isInvalidArrayHeader(firstLine)) {
+      throw new ToonDecodingError(
+        'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
+        { lineNumber: lines[0].lineNumber, line: firstLine },
+      );
+    }
+
     // Check if single line and no colon (primitive)
     if (lines.length === 1 && !firstLine.includes(':')) {
       return 'primitive';
@@ -320,6 +328,14 @@ export class ToonDecoder {
       // Parse element
       const content = line.content.trim();
 
+      // Per §14: strict mode error for non-whitespace between bracket segment and {/:
+      if (this.options.strict && this.isInvalidArrayHeader(content)) {
+        throw new ToonDecodingError(
+          'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
+          { lineNumber: line.lineNumber, line: content },
+        );
+      }
+
       // Check if it's a nested array (must be a valid array header per §9.3)
       if (/^\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
         // Save any pending object first
@@ -517,6 +533,14 @@ export class ToonDecoder {
       // Parse key-value pair
       const content = line.content.trim();
 
+      // Per §14: strict mode error for non-whitespace between bracket segment and {/:
+      if (this.options.strict && this.isInvalidArrayHeader(content)) {
+        throw new ToonDecodingError(
+          'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
+          { lineNumber: line.lineNumber, line: content },
+        );
+      }
+
       // Check for array (must be a valid array header per §9.3 — non-whitespace between ] and {/: → fall-through to key-value)
       if (/\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
         const headerMatch = content.match(/^(.*?)\[/);
@@ -591,6 +615,14 @@ export class ToonDecoder {
    */
   private isValidArrayHeader(content: string): boolean {
     return /^(.*?)\[(\d+)([\t|])?\]\s*(?:\{[^}]+\}\s*)?:/.test(content);
+  }
+
+  /**
+   * Check if a line looks like an array header but has non-whitespace between ] and {/:
+   * Per §14: such lines are a decoding error in strict mode
+   */
+  private isInvalidArrayHeader(content: string): boolean {
+    return /\[\d+[\t|]?\]/.test(content) && !this.isValidArrayHeader(content);
   }
 
   /**

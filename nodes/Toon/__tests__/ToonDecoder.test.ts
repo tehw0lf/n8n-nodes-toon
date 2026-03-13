@@ -472,6 +472,12 @@ describe('ToonDecoder', () => {
       const decoder = new ToonDecoder(defaultOptions);
       expect(decoder.decode('items[2]: a, b')).toEqual({ items: ['a', 'b'] });
     });
+
+    it('should throw in strict mode when non-whitespace appears between ] and : (§14 v3.0.3)', () => {
+      const decoder = new ToonDecoder({ indent: 2, strict: true, expandPaths: 'off' });
+      expect(() => decoder.decode('foo[2][bar]: x')).toThrow(ToonDecodingError);
+      expect(() => decoder.decode('foo[2][bar]: x')).toThrow('MUST NOT be parsed as array header');
+    });
   });
 
   describe('error handling', () => {
