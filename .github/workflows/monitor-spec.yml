@@ -103,12 +103,17 @@ jobs:
       - name: Create issue for spec update
         if: steps.compare.outputs.changes_detected == 'true'
         uses: actions/github-script@v7
+        env:
+          LOCAL_VERSION: ${{ steps.local-version.outputs.version }}
+          UPSTREAM_VERSION: ${{ steps.upstream-version.outputs.version }}
+          UPSTREAM_DATE: ${{ steps.upstream-version.outputs.date }}
+          SPEC_DIFF: ${{ steps.diff.outputs.diff }}
         with:
           script: |
-            const localVersion = '${{ steps.local-version.outputs.version }}';
-            const upstreamVersion = '${{ steps.upstream-version.outputs.version }}';
-            const upstreamDate = '${{ steps.upstream-version.outputs.date }}';
-            const diff = `${{ steps.diff.outputs.diff }}`;
+            const localVersion = process.env.LOCAL_VERSION;
+            const upstreamVersion = process.env.UPSTREAM_VERSION;
+            const upstreamDate = process.env.UPSTREAM_DATE;
+            const diff = process.env.SPEC_DIFF;
 
             const issueTitle = `TOON Specification Update Available: v${upstreamVersion}`;
 
