@@ -443,6 +443,43 @@ describe('ToonDecoder', () => {
     });
   });
 
+  describe('leading zeros (§4 v3.0.3)', () => {
+    it('should treat tokens with forbidden leading zeros as strings', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('key: 05')).toEqual({ key: '05' });
+      expect(decoder.decode('key: 0001')).toEqual({ key: '0001' });
+      expect(decoder.decode('key: -05')).toEqual({ key: '-05' });
+      expect(decoder.decode('key: -0001')).toEqual({ key: '-0001' });
+    });
+
+    it('should treat zero integer part with fractional/exponent as numbers', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('key: 0.5')).toEqual({ key: 0.5 });
+      expect(decoder.decode('key: 0e1')).toEqual({ key: 0 });
+      expect(decoder.decode('key: -0.5')).toEqual({ key: -0.5 });
+      expect(decoder.decode('key: -0e1')).toEqual({ key: -0 });
+    });
+  });
+
+  describe('array header fall-through (§9.3 v3.0.3)', () => {
+    it('should treat non-whitespace between ] and : as key-value, not array header', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      // foo[2][bar]: x → literal key, not array header
+      expect(decoder.decode('foo[2][bar]: x')).toEqual({ 'foo[2][bar]': 'x' });
+    });
+
+    it('should still parse valid array headers with whitespace between ] and :', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('items[2]: a, b')).toEqual({ items: ['a', 'b'] });
+    });
+
+    it('should throw in strict mode when non-whitespace appears between ] and : (§14 v3.0.3)', () => {
+      const decoder = new ToonDecoder({ indent: 2, strict: true, expandPaths: 'off' });
+      expect(() => decoder.decode('foo[2][bar]: x')).toThrow(ToonDecodingError);
+      expect(() => decoder.decode('foo[2][bar]: x')).toThrow('MUST NOT be parsed as array header');
+    });
+  });
+
   describe('error handling', () => {
     it('should parse malformed array-like keys as object keys', () => {
       const decoder = new ToonDecoder(defaultOptions);

@@ -217,7 +217,7 @@ Implementations that fail to conform to any MUST or REQUIRED level requirement a
   - Encoders SHOULD provide an option to choose lossless stringification for out-of-range numbers.
 - Numbers (decoding):
   - Decoders MUST accept decimal and exponent forms on input (e.g., 42, -3.14, 1e-6, -1E+9).
-  - Decoders MUST treat tokens with forbidden leading zeros in the integer part (e.g., `"05"`, `"0001"`, `"-05"`, `"-0001"`) as strings, not numbers. This rule does **not** apply to a single zero integer part followed by a fractional or exponent part (e.g., `0.5`, `0e1`, `-0.5`, `-0e1`), which are valid numbers.
+  - Decoders MUST treat tokens with forbidden leading zeros (e.g., "05", "0001") as strings, not numbers.
   - If a decoded numeric token is not representable in the host's default numeric type without loss, implementations MAY:
     - Return a higher-precision numeric type (e.g., arbitrary-precision integer or decimal), OR
     - Return a string, OR
@@ -232,7 +232,6 @@ Encoders MUST normalize non-JSON values to the JSON data model before encoding. 
 - Number:
   - Finite → number (canonical decimal form per Section 2). -0 → 0.
   - NaN, +Infinity, -Infinity → null.
-- Implementations MAY honor host-language–specific serialization hooks (for example, a `toJSON()` method in JavaScript or an equivalent mechanism) as part of host-type normalization. When supported, such hooks SHOULD be applied before other host-type mappings and their behavior MUST be documented by the implementation.
 - Examples of host-type normalization (non-normative):
   - Date/time objects → ISO 8601 string representation.
   - Set-like collections → array.
@@ -348,8 +347,6 @@ unquoted-key  = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" / "." )
 Note: The ABNF grammar above cannot enforce that the delimiter used in the fields segment (braces) matches the delimiter declared in the bracket segment. This equality requirement is normative per the prose in lines 311-312 above and MUST be enforced by implementations. Mismatched delimiters between bracket and brace segments MUST error in strict mode.
 
 Note: The grammar above specifies header syntax. TOON's grammar is deliberately designed to prioritize human readability and token efficiency over strict LR(1) parseability. This requires some context-sensitive parsing (particularly for tabular row disambiguation in Section 9.3), which is a deliberate design tradeoff. Reference implementations demonstrate that deterministic parsing is achievable with modest lookahead.
-
-Between the closing bracket `]` of the bracket segment and the opening brace `{` of a fields segment (or the colon `:` if no fields segment is present), only whitespace MAY appear. If a decoder encounters non-whitespace content in these positions (e.g., additional bracket expressions like `[bar]`), the line MUST NOT be interpreted as an array header. Decoders SHOULD fall through to key-value parsing (Section 8), treating the entire pre-colon content as a literal key.
 
 Decoding requirements:
 - The bracket segment MUST parse as a non-negative integer length N.
@@ -731,7 +728,6 @@ When strict mode is enabled (default), decoders MUST error on the following cond
 - Missing colon in key context.
 - Invalid escape sequences or unterminated strings in quoted tokens.
 - Delimiter mismatch (detected via width/count checks and header scope).
-- Non-whitespace content between a valid bracket segment and the colon (or fields segment). Such lines MUST NOT be parsed as array headers. Decoders MUST NOT silently discard content in these positions.
 
 ### 14.3 Indentation Errors
 
@@ -1338,7 +1334,6 @@ Collection Types:
 - `Map`: Convert to object using `String(key)` for keys and normalizing values recursively. Non-string keys are coerced to strings.
 
 Object Types:
-- Objects with a `toJSON()` method: Call `value.toJSON()` and then normalize the returned value recursively before encoding. This allows domain objects to override default normalization behavior in a controlled, deterministic way (similar to `JSON.stringify`). Implementations SHOULD guard against `toJSON()` returning the same object (to avoid infinite recursion) and MAY fall back to default normalization in that case.
 - Plain objects: Enumerate own enumerable string keys in encounter order; normalize values recursively.
 
 Non-Serializable Types:

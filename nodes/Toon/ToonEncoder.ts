@@ -58,6 +58,20 @@ export class ToonEncoder {
       return value;
     }
 
+    // Per §3: honor toJSON() hook before other host-type mappings
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as Record<string, unknown>)['toJSON'] === 'function'
+    ) {
+      const toJSON = (value as Record<string, unknown>)['toJSON'] as () => unknown;
+      const serialized = toJSON.call(value);
+      // Guard against toJSON() returning the same object (infinite recursion)
+      if (serialized !== value) {
+        return this.normalizeValue(serialized);
+      }
+    }
+
     if (Array.isArray(value)) {
       return value.map((item) => this.normalizeValue(item));
     }

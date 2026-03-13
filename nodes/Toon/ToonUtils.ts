@@ -232,9 +232,21 @@ function expandExponentialNotation(num: number): string {
 
 /**
  * Check if a string token looks like a number
+ * Per §4: tokens with forbidden leading zeros in the integer part are strings.
+ * Forbidden: "05", "0001", "-05", "-0001"
+ * Allowed: "0.5", "0e1", "-0.5", "-0e1" (zero integer part with fractional/exponent)
  */
 export function isNumericToken(token: string): boolean {
-  return /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(token) && token !== '' && token !== '-';
+  if (!/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(token) || token === '' || token === '-') {
+    return false;
+  }
+  // Reject forbidden leading zeros: integer part > 1 digit starting with 0
+  // e.g. "05", "0001", "-05", "-0001" → string
+  // but "0.5", "0e1", "-0.5", "-0e1" → valid number (zero integer part + fractional/exponent)
+  if (/^-?0\d/.test(token) && !/^-?0[.eE]/.test(token)) {
+    return false;
+  }
+  return true;
 }
 
 /**
