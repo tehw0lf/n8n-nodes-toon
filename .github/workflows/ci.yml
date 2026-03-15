@@ -25,5 +25,5 @@ jobs:
       build_main: "run build"
       artifact_path: "dist"
       library_path: "dist"
-      publish_github_release: "false"
+      publish_github_release: "true"
       npm_audit_omit_dev: true

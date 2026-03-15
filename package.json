@@ -1,6 +1,6 @@
 {
 	"name": "@tehw0lf/n8n-nodes-toon",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "n8n node for TOON (Token-Oriented Object Notation) format conversion - bidirectional conversion between TOON and JSON with zero external dependencies",
 	"toonSpecVersion": "3.0.3",
 	"license": "MIT",
@@ -32,8 +32,7 @@
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
-		"release": "n8n-node release",
-		"prepublishOnly": "n8n-node prerelease"
+		"release": "n8n-node release"
 	},
 	"files": [
 		"dist"
