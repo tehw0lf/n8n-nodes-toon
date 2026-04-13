@@ -22,6 +22,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  pull-requests: write
 
 jobs:
   # Scan source code for security vulnerabilities
@@ -29,9 +30,10 @@ jobs:
     name: Scan Source Code
     uses: tehw0lf/workflows/.github/workflows/security-scan-source.yml@main
     permissions:
-      contents: read
+      contents: write
       security-events: write
       actions: read
+      pull-requests: write
     with:
       tool: "npm"
       semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
