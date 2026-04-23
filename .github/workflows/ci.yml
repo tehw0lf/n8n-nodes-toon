@@ -28,3 +28,4 @@ jobs:
       library_path: "dist"
       publish_github_release: "true"
       npm_audit_omit_dev: true
+      npm_audit_severity_threshold: "high"
