@@ -29,10 +29,7 @@
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
 		"lint:fix": "n8n-node lint --fix",
-		"test": "jest",
-		"test:watch": "jest --watch",
-		"test:coverage": "jest --coverage",
-		"release": "n8n-node release"
+		"test": "jest"
 	},
 	"files": [
 		"dist"
