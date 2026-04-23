@@ -51,9 +51,11 @@ jobs:
 
       - name: Fetch latest upstream spec
         id: upstream-version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Fetch the latest release version from GitHub Releases API (more reliable than README/SPEC.md)
-          RELEASE_JSON=$(curl -sSL "https://api.github.com/repos/toon-format/spec/releases/latest")
+          RELEASE_JSON=$(curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/toon-format/spec/releases/latest")
           VERSION=$(echo "${RELEASE_JSON}" | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/')
           DATE=$(echo "${RELEASE_JSON}" | grep -m1 '"published_at"' | sed 's/.*"published_at": *"\([0-9-]*\).*/\1/')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
