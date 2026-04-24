@@ -11,6 +11,5 @@
 			}
 		]
 	},
-	"alias": ["JSON", "Data Format", "Conversion"],
-	"icon": "file:toon.svg"
+	"alias": ["JSON", "Data Format", "Conversion"]
 }
