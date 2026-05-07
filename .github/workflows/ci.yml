@@ -29,3 +29,4 @@ jobs:
       publish_github_release: "true"
       npm_audit_omit_dev: true
       npm_audit_severity_threshold: "high"
+      cyclonedx_ignore_npm_errors: true
