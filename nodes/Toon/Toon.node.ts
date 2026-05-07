@@ -24,6 +24,7 @@ export class Toon implements INodeType {
     group: ['transform'],
     version: 1,
     description: 'Convert between TOON and JSON formats with zero external dependencies',
+    subtitle: '={{$parameter["operation"]}}',
     defaults: {
       name: 'TOON',
     },
@@ -270,10 +271,6 @@ export class Toon implements INodeType {
             pairedItem: { item: itemIndex },
           });
         } else {
-          if (error.context) {
-            error.context.itemIndex = itemIndex;
-            throw error;
-          }
           throw new NodeOperationError(this.getNode(), error as Error, {
             itemIndex,
           });
