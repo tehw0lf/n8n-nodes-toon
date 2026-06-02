@@ -644,9 +644,34 @@ flags[3]: true, false, true`;
   });
 
   describe('v3.3: bracket length leading zeros rejected (§6)', () => {
-    it('should error on [03] in strict mode', () => {
+    it('should error on [03] at root in strict mode', () => {
       const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
       expect(() => strictDecoder.decode('[03]:')).toThrow();
+    });
+
+    it('should error on [0001] at root in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('[0001]:')).toThrow();
+    });
+
+    it('should error on items[03] in object context in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('items[03]: a,b,c')).toThrow();
+    });
+
+    it('should still accept [0]: as valid zero-length array', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(strictDecoder.decode('[0]:')).toEqual([]);
+    });
+  });
+
+  describe('v3.3: [] token inside inline array is a string (§4 scope)', () => {
+    it('should treat [] as string token when inside inline array values', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      // Per spec §4, [] as an empty-array literal applies only to object field position
+      // and root position — not inside comma-separated inline array values
+      const result = decoder.decode('[3]: 1,2,3') as unknown[];
+      expect(result).toEqual([1, 2, 3]);
     });
   });
 

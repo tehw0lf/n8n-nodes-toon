@@ -72,8 +72,8 @@ export function unescapeString(str: string): string {
           i += 2;
           break;
         case 'u': {
-          // \uXXXX — must be exactly 4 hex digits
-          if (i + 5 >= str.length + 1) {
+          // \uXXXX — must be exactly 4 hex digits; needs 6 chars from i (\, u, 4 hex)
+          if (i + 6 > str.length) {
             throw new Error(`Invalid escape sequence: \\u requires 4 hex digits at position ${i}`);
           }
           const hexStr = str.slice(i + 2, i + 6);
