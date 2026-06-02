@@ -1,25 +1,43 @@
 /**
  * TOON Utilities - Core helper functions for encoding and decoding
- * Implements TOON Specification v2.0
+ * Implements TOON Specification v3.3
  */
 
 import type { Delimiter } from './types';
 
 /**
  * Escape string according to TOON spec §7.1
- * Only escape: backslash, quote, newline, carriage return, tab
+ * - U+0000–U+001F: \uXXXX (except \n, \r, \t which use named escapes)
+ * - backslash → \\, quote → \", LF → \n, CR → \r, HTAB → \t
  */
 export function escapeString(str: string): string {
-  return str
-    .replace(/\\/g, '\\\\') // Backslash must be first
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const code = str.charCodeAt(i);
+    if (ch === '\\') {
+      result += '\\\\';
+    } else if (ch === '"') {
+      result += '\\"';
+    } else if (ch === '\n') {
+      result += '\\n';
+    } else if (ch === '\r') {
+      result += '\\r';
+    } else if (ch === '\t') {
+      result += '\\t';
+    } else if (code <= 0x1f) {
+      // Other U+0000–U+001F controls MUST use \uXXXX per §7.1
+      result += '\\u' + code.toString(16).padStart(4, '0');
+    } else {
+      result += ch;
+    }
+  }
+  return result;
 }
 
 /**
  * Unescape string and validate escape sequences per §7.1
+ * Accepts: \\, \", \n, \r, \t, \uXXXX (4 hex digits, no lone surrogates)
  */
 export function unescapeString(str: string): string {
   let result = '';
@@ -35,25 +53,47 @@ export function unescapeString(str: string): string {
       switch (nextChar) {
         case '\\':
           result += '\\';
+          i += 2;
           break;
         case '"':
           result += '"';
+          i += 2;
           break;
         case 'n':
           result += '\n';
+          i += 2;
           break;
         case 'r':
           result += '\r';
+          i += 2;
           break;
         case 't':
           result += '\t';
+          i += 2;
           break;
+        case 'u': {
+          // \uXXXX — must be exactly 4 hex digits; needs 6 chars from i (\, u, 4 hex)
+          if (i + 6 > str.length) {
+            throw new Error(`Invalid escape sequence: \\u requires 4 hex digits at position ${i}`);
+          }
+          const hexStr = str.slice(i + 2, i + 6);
+          if (!/^[0-9a-fA-F]{4}$/.test(hexStr)) {
+            throw new Error(`Invalid escape sequence: \\u${hexStr} at position ${i}. Must be 4 hex digits`);
+          }
+          const codePoint = parseInt(hexStr, 16);
+          // Reject lone surrogates (U+D800–U+DFFF)
+          if (codePoint >= 0xd800 && codePoint <= 0xdfff) {
+            throw new Error(`Invalid escape sequence: \\u${hexStr} is a lone surrogate`);
+          }
+          result += String.fromCharCode(codePoint);
+          i += 6;
+          break;
+        }
         default:
           throw new Error(
-            `Invalid escape sequence: \\${nextChar} at position ${i}. Only \\\\, \\", \\n, \\r, \\t are allowed`,
+            `Invalid escape sequence: \\${nextChar} at position ${i}`,
           );
       }
-      i += 2;
     } else {
       result += str[i];
       i++;
@@ -122,8 +162,9 @@ export function needsQuoting(
     return true;
   }
 
-  // Contains whitespace characters
-  if (/[\n\r\t]/.test(value)) {
+  // Contains control characters U+0000–U+001F per §7.2
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(value)) {
     return true;
   }
 
@@ -145,88 +186,59 @@ export function needsQuoting(
 
 /**
  * Canonicalize number per TOON spec §2
- * - No exponent notation
- * - No trailing zeros after decimal
+ * - 0 or 1e-6 ≤ |n| < 1e21: fixed decimal, no trailing zeros, no leading zeros
+ * - |n| < 1e-6 or |n| ≥ 1e21: MAY use exponent notation (lowercase e, explicit sign per §2)
  * - -0 becomes 0
- * - No leading zeros
  */
 export function canonicalizeNumber(num: number): string {
-  // Handle non-finite numbers
   if (!isFinite(num)) {
     return 'null';
   }
 
-  // Handle negative zero
   if (Object.is(num, -0)) {
     return '0';
   }
 
-  // Convert to string without exponent if possible
-  let str: string;
+  const absNum = Math.abs(num);
 
-  // Check if number is in exponential notation
+  // For numbers outside the canonical fixed-point range, use exponent notation per §2
+  if (absNum !== 0 && (absNum < 1e-6 || absNum >= 1e21)) {
+    // Produce lowercase e with explicit sign for byte-for-byte determinism
+    const raw = num.toExponential();
+    // Strip trailing zeros in mantissa, then normalize exponent sign
+    return raw
+      .replace(/(\.\d*?)0+(e)/, '$1$2')
+      .replace(/\.(e)/, '$1')
+      .replace(/e([+-]?\d+)$/, (_, e) => {
+        const sign = e.startsWith('-') ? '-' : '+';
+        const digits = e.replace(/^[+-]/, '').replace(/^0+(\d)/, '$1');
+        return `e${sign}${digits}`;
+      });
+  }
+
+  // Fixed decimal form for the canonical range
   const basicStr = num.toString();
+  let str: string;
   if (basicStr.includes('e') || basicStr.includes('E')) {
-    // Manually expand exponential notation
-    str = expandExponentialNotation(num);
+    str = expandToFixedDecimal(num);
   } else {
     str = basicStr;
   }
 
-  // Remove trailing zeros after decimal point
   if (str.includes('.')) {
     str = str.replace(/\.?0+$/, '');
-  }
-
-  // Remove leading zeros (but keep single 0)
-  if (str !== '0' && !str.startsWith('0.')) {
-    str = str.replace(/^(-?)0+(\d)/, '$1$2');
   }
 
   return str;
 }
 
 /**
- * Expand exponential notation to fixed-point notation
+ * Expand a number to fixed-point decimal string (for the canonical range 1e-6 ≤ |n| < 1e21)
  */
-function expandExponentialNotation(num: number): string {
-  // For very large or very small numbers, use toPrecision
-  const absNum = Math.abs(num);
-
-  if (absNum >= 1e21 || (absNum < 1e-6 && absNum > 0)) {
-    // For these ranges, use toFixed with appropriate precision
-    const str = num.toExponential();
-    const match = str.match(/^(-?\d\.?\d*)e([+-]\d+)$/);
-
-    if (match) {
-      const [, mantissa, exponent] = match;
-      const exp = parseInt(exponent, 10);
-      const mantissaNum = parseFloat(mantissa);
-
-      if (exp >= 0) {
-        // Positive exponent: move decimal right
-        const shifted = mantissaNum * Math.pow(10, exp);
-        return shifted.toString().replace(/\.?0+$/, '');
-      } else {
-        // Negative exponent: move decimal left
-        const precision = Math.abs(exp) + 10;
-        return mantissaNum.toFixed(precision).replace(/\.?0+$/, '');
-      }
-    }
-  }
-
-  // For normal range, use toFixed with enough precision
+function expandToFixedDecimal(num: number): string {
   if (Number.isInteger(num)) {
     return num.toString();
   }
-
-  // Calculate needed decimal places
-  const str = num.toString();
-  if (!str.includes('e') && !str.includes('E')) {
-    return str;
-  }
-
-  // Use toFixed with maximum precision
   return num.toFixed(20).replace(/\.?0+$/, '');
 }
 

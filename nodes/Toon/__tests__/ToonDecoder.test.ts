@@ -629,4 +629,71 @@ flags[3]: true, false, true`;
       });
     });
   });
+
+  // v3.3 additions
+  describe('v3.3: empty array literal [] (§4/§5)', () => {
+    it('should decode bare "[]" as empty root array', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('[]')).toEqual([]);
+    });
+
+    it('should decode "key: []" as empty array field', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('tags: []')).toEqual({ tags: [] });
+    });
+  });
+
+  describe('v3.3: bracket length leading zeros rejected (§6)', () => {
+    it('should error on [03] at root in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('[03]:')).toThrow();
+    });
+
+    it('should error on [0001] at root in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('[0001]:')).toThrow();
+    });
+
+    it('should error on items[03] in object context in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('items[03]: a,b,c')).toThrow();
+    });
+
+    it('should still accept [0]: as valid zero-length array', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(strictDecoder.decode('[0]:')).toEqual([]);
+    });
+  });
+
+  describe('v3.3: [] token inside inline array is a string (§4 scope)', () => {
+    it('should treat [] as string token when inside inline array values', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      // Per spec §4, [] as an empty-array literal applies only to object field position
+      // and root position — not inside comma-separated inline array values
+      const result = decoder.decode('[3]: 1,2,3') as unknown[];
+      expect(result).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('v3.3: \\uXXXX escape sequences in quoted strings (§7.1)', () => {
+    it('should decode \\u0041 as "A"', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('name: "\\u0041"')).toEqual({ name: 'A' });
+    });
+
+    it('should decode \\u0000 as NUL character', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('val: "\\u0000"')).toEqual({ val: '\x00' });
+    });
+
+    it('should reject lone surrogate \\ud800', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(() => decoder.decode('val: "\\ud800"')).toThrow();
+    });
+
+    it('should reject unknown escape \\x41', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(() => decoder.decode('val: "\\x41"')).toThrow();
+    });
+  });
 });

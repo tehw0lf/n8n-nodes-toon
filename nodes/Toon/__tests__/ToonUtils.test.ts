@@ -171,4 +171,114 @@ describe('ToonUtils', () => {
       expect(utils.isNumericToken('-0001')).toBe(false);
     });
   });
+
+  // v3.3 additions
+  describe('escapeString v3.3: \\uXXXX for U+0000–U+001F controls (§7.1)', () => {
+    it('should escape NUL (U+0000) as \\u0000', () => {
+      expect(utils.escapeString('\x00')).toBe('\\u0000');
+    });
+
+    it('should escape U+0001 as \\u0001', () => {
+      expect(utils.escapeString('\x01')).toBe('\\u0001');
+    });
+
+    it('should escape U+001f as \\u001f', () => {
+      expect(utils.escapeString('\x1f')).toBe('\\u001f');
+    });
+
+    it('should still use named escapes for \\n, \\r, \\t', () => {
+      expect(utils.escapeString('\n')).toBe('\\n');
+      expect(utils.escapeString('\r')).toBe('\\r');
+      expect(utils.escapeString('\t')).toBe('\\t');
+    });
+
+    it('should not escape regular printable characters', () => {
+      expect(utils.escapeString('hello world')).toBe('hello world');
+    });
+  });
+
+  describe('unescapeString v3.3: \\uXXXX support (§7.1)', () => {
+    it('should unescape \\u0041 to A', () => {
+      expect(utils.unescapeString('\\u0041')).toBe('A');
+    });
+
+    it('should unescape \\u0000 to NUL', () => {
+      expect(utils.unescapeString('\\u0000')).toBe('\x00');
+    });
+
+    it('should unescape \\u001f to U+001F', () => {
+      expect(utils.unescapeString('\\u001f')).toBe('\x1f');
+    });
+
+    it('should be case-insensitive for hex digits', () => {
+      expect(utils.unescapeString('\\u004F')).toBe('O');
+      expect(utils.unescapeString('\\u004f')).toBe('O');
+    });
+
+    it('should reject lone surrogates', () => {
+      expect(() => utils.unescapeString('\\ud800')).toThrow();
+      expect(() => utils.unescapeString('\\udfff')).toThrow();
+    });
+
+    it('should reject \\u with fewer than 4 hex digits', () => {
+      expect(() => utils.unescapeString('\\u041')).toThrow();
+      expect(() => utils.unescapeString('\\u')).toThrow();
+    });
+
+    it('regression: \\uABC at end of string (off-by-one boundary, i+5 == str.length)', () => {
+      // "\\uABC" is 6 chars but only 3 hex digits — must throw before slicing
+      // Previously i+5 >= str.length+1 evaluated to false for this exact length
+      expect(() => utils.unescapeString('\\uABC')).toThrow();
+    });
+
+    it('should reject unknown escape sequences', () => {
+      expect(() => utils.unescapeString('\\x41')).toThrow();
+      expect(() => utils.unescapeString('\\q')).toThrow();
+    });
+  });
+
+  describe('canonicalizeNumber v3.3: exponent notation for out-of-range values (§2)', () => {
+    it('should use fixed decimal for normal range', () => {
+      expect(utils.canonicalizeNumber(1e3)).toBe('1000');
+      expect(utils.canonicalizeNumber(1.5e2)).toBe('150');
+      expect(utils.canonicalizeNumber(5e-1)).toBe('0.5');
+      expect(utils.canonicalizeNumber(1e-6)).toBe('0.000001');
+    });
+
+    it('should use exponent notation for |n| < 1e-6', () => {
+      const result = utils.canonicalizeNumber(1e-7);
+      expect(result).toMatch(/^1e[-+]/);
+    });
+
+    it('should use exponent notation for |n| >= 1e21', () => {
+      const result = utils.canonicalizeNumber(1e21);
+      expect(result).toMatch(/^1e[+]/);
+    });
+
+    it('should use lowercase e with explicit sign in exponent', () => {
+      const result = utils.canonicalizeNumber(1e-7);
+      expect(result).toMatch(/e[-+]/);
+      expect(result).not.toMatch(/E/);
+    });
+  });
+
+  describe('needsQuoting v3.3: full U+0000–U+001F control character range (§7.2)', () => {
+    it('should require quotes for NUL byte', () => {
+      expect(utils.needsQuoting('\x00', ',', ',', 'object')).toBe(true);
+    });
+
+    it('should require quotes for U+0001', () => {
+      expect(utils.needsQuoting('\x01', ',', ',', 'object')).toBe(true);
+    });
+
+    it('should require quotes for U+001f', () => {
+      expect(utils.needsQuoting('\x1f', ',', ',', 'object')).toBe(true);
+    });
+
+    it('should require quotes for tab, newline, carriage return', () => {
+      expect(utils.needsQuoting('\t', ',', ',', 'object')).toBe(true);
+      expect(utils.needsQuoting('\n', ',', ',', 'object')).toBe(true);
+      expect(utils.needsQuoting('\r', ',', ',', 'object')).toBe(true);
+    });
+  });
 });

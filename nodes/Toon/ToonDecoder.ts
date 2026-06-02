@@ -1,6 +1,6 @@
 /**
  * TOON Decoder - Parses TOON format to JSON
- * Implements TOON Specification v2.0
+ * Implements TOON Specification v3.3
  */
 
 import type { DecoderOptions, Delimiter, HeaderInfo, ParsedLine } from './types';
@@ -102,9 +102,13 @@ export class ToonDecoder {
   private determineRootForm(lines: ParsedLine[]): 'array' | 'primitive' | 'object' {
     const firstLine = lines[0].content.trim();
 
-    // Check for array header pattern per §6
-    // Only treat as array if it starts with [ (no key before it) and is a valid array header
-    if (/^\[\d+[\t|]?\]/.test(firstLine) && this.isValidArrayHeader(firstLine)) {
+    // Check for array header pattern per §6 (length must have no leading zeros)
+    if (/^\[(?:0|[1-9]\d*)[\t|]?\]/.test(firstLine) && this.isValidArrayHeader(firstLine)) {
+      return 'array';
+    }
+
+    // Per §4/§5: bare "[]" at root decodes as empty root array
+    if (firstLine === '[]') {
       return 'array';
     }
 
@@ -127,15 +131,29 @@ export class ToonDecoder {
 
   /**
    * Parse array header per §6
+   * Per §6: bracket length MUST be a non-negative integer with no leading zeros.
+   * [03], [-1], [bar] are invalid and MUST error in strict mode.
    */
   private parseArrayHeader(line: ParsedLine): HeaderInfo {
     const content = line.content.trim();
 
+    // Handle bare "[]" as empty root array per §4/§5
+    if (content === '[]') {
+      return { key: null, length: 0, delimiter: ',', fields: null, rawLine: content, lineNumber: line.lineNumber };
+    }
+
     // Match pattern: optional_key [length delimiter_symbol] optional_{fields} : optional_values
-    // Per §9.3: only whitespace may appear between ] and { or : — non-whitespace means it's not an array header
-    const match = content.match(/^(.*?)\[(\d+)([\t|])?\]\s*(?:\{([^}]+)\}\s*)?:(.*)$/);
+    // Length must be 0 or a positive integer with no leading zeros per §6
+    const match = content.match(/^(.*?)\[(0|[1-9]\d*)([\t|])?\]\s*(?:\{([^}]+)\}\s*)?:(.*)$/);
 
     if (!match) {
+      // Check if it looks like a bracket with leading zeros — explicit error per §6
+      if (this.options.strict && /\[0\d+[\t|]?\]/.test(content)) {
+        throw new ToonDecodingError(
+          `Invalid array length: leading zeros are not allowed in bracket segment`,
+          { lineNumber: line.lineNumber, line: content },
+        );
+      }
       throw new ToonDecodingError('Invalid array header format', {
         lineNumber: line.lineNumber,
         line: content,
@@ -147,7 +165,6 @@ export class ToonDecoder {
     // Parse key
     let key: string | null = keyPart.trim();
     if (key) {
-      // Unquote if quoted
       if (key.startsWith('"') && key.endsWith('"')) {
         key = utils.unescapeString(key.slice(1, -1));
       }
@@ -254,6 +271,11 @@ export class ToonDecoder {
   private parseArray(lines: ParsedLine[], startIndex: number): unknown[] {
     const headerLine = lines[startIndex];
     const header = this.parseArrayHeader(headerLine);
+
+    // Per §4/§5: bare "[]" is an empty array literal
+    if (header.rawLine === '[]') {
+      return [];
+    }
 
     // Check if values are inline (same line as header)
     const inlineMatch = header.rawLine.match(/:\s*(.+)$/);
@@ -600,8 +622,12 @@ export class ToonDecoder {
           currentIndex++;
         }
       } else {
-        // Value on same line
-        obj[key] = this.parseTokenValue(valuePart);
+        // Per §4/§5: "[]" in object field position decodes as empty array
+        if (valuePart === '[]') {
+          obj[key] = [];
+        } else {
+          obj[key] = this.parseTokenValue(valuePart);
+        }
         currentIndex++;
       }
     }
@@ -610,18 +636,20 @@ export class ToonDecoder {
   }
 
   /**
-   * Check if a line content is a valid array header per §9.3
-   * Only whitespace may appear between ] and { or : — non-whitespace means fall-through to key-value
+   * Check if a line content is a valid array header per §6
+   * Length must have no leading zeros; only whitespace between ] and { or :
    */
   private isValidArrayHeader(content: string): boolean {
-    return /^(.*?)\[(\d+)([\t|])?\]\s*(?:\{[^}]+\}\s*)?:/.test(content);
+    if (content === '[]') return true;
+    return /^(.*?)\[(0|[1-9]\d*)([\t|])?\]\s*(?:\{[^}]+\}\s*)?:/.test(content);
   }
 
   /**
-   * Check if a line looks like an array header but has non-whitespace between ] and {/:
+   * Check if a line looks like an array header but is invalid (leading zeros or non-whitespace between ] and {/:)
    * Per §14: such lines are a decoding error in strict mode
    */
   private isInvalidArrayHeader(content: string): boolean {
+    // Has bracket segment but is not a valid header
     return /\[\d+[\t|]?\]/.test(content) && !this.isValidArrayHeader(content);
   }
 
