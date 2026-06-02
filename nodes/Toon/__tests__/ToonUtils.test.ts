@@ -225,6 +225,12 @@ describe('ToonUtils', () => {
       expect(() => utils.unescapeString('\\u')).toThrow();
     });
 
+    it('regression: \\uABC at end of string (off-by-one boundary, i+5 == str.length)', () => {
+      // "\\uABC" is 6 chars but only 3 hex digits — must throw before slicing
+      // Previously i+5 >= str.length+1 evaluated to false for this exact length
+      expect(() => utils.unescapeString('\\uABC')).toThrow();
+    });
+
     it('should reject unknown escape sequences', () => {
       expect(() => utils.unescapeString('\\x41')).toThrow();
       expect(() => utils.unescapeString('\\q')).toThrow();
