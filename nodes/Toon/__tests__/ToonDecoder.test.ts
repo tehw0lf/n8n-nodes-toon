@@ -629,4 +629,46 @@ flags[3]: true, false, true`;
       });
     });
   });
+
+  // v3.3 additions
+  describe('v3.3: empty array literal [] (§4/§5)', () => {
+    it('should decode bare "[]" as empty root array', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('[]')).toEqual([]);
+    });
+
+    it('should decode "key: []" as empty array field', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('tags: []')).toEqual({ tags: [] });
+    });
+  });
+
+  describe('v3.3: bracket length leading zeros rejected (§6)', () => {
+    it('should error on [03] in strict mode', () => {
+      const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      expect(() => strictDecoder.decode('[03]:')).toThrow();
+    });
+  });
+
+  describe('v3.3: \\uXXXX escape sequences in quoted strings (§7.1)', () => {
+    it('should decode \\u0041 as "A"', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('name: "\\u0041"')).toEqual({ name: 'A' });
+    });
+
+    it('should decode \\u0000 as NUL character', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(decoder.decode('val: "\\u0000"')).toEqual({ val: '\x00' });
+    });
+
+    it('should reject lone surrogate \\ud800', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(() => decoder.decode('val: "\\ud800"')).toThrow();
+    });
+
+    it('should reject unknown escape \\x41', () => {
+      const decoder = new ToonDecoder(defaultOptions);
+      expect(() => decoder.decode('val: "\\x41"')).toThrow();
+    });
+  });
 });
