@@ -184,14 +184,26 @@ jobs:
                 issue_number: existingIssue.number,
                 body: `🔄 **Reminder:** This specification update is still pending.\n\nLast checked: ${new Date().toISOString()}`
               });
+
+              // Assign if not already assigned
+              const alreadyAssigned = existingIssue.assignees.some(a => a.login === context.repo.owner);
+              if (!alreadyAssigned) {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingIssue.number,
+                  assignees: [context.repo.owner]
+                });
+              }
             } else {
-              // Create a new issue
+              // Create a new issue and assign the repo owner
               const issue = await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: issueTitle,
                 body: issueBody,
-                labels: ['spec-update', 'enhancement']
+                labels: ['spec-update', 'enhancement'],
+                assignees: [context.repo.owner]
               });
 
               console.log(`Created issue #${issue.data.number}`);
