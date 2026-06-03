@@ -1,6 +1,6 @@
 {
 	"name": "@tehw0lf/n8n-nodes-toon",
-	"version": "1.3.0",
+	"version": "1.3.1",
 	"description": "n8n node for TOON (Token-Oriented Object Notation) format conversion - bidirectional conversion between TOON and JSON with zero external dependencies",
 	"toonSpecVersion": "3.3.0",
 	"license": "MIT",
@@ -27,8 +27,8 @@
 		"build": "n8n-node build",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
-		"lint": "n8n-node lint",
-		"lint:fix": "n8n-node lint --fix",
+		"lint": "npx @n8n/node-cli@latest lint",
+		"lint:fix": "npx @n8n/node-cli@latest lint --fix",
 		"test": "jest"
 	},
 	"files": [
@@ -55,6 +55,6 @@
 		"typescript": "5.9.3"
 	},
 	"peerDependencies": {
-		"n8n-workflow": "^2.7.0"
+		"n8n-workflow": "*"
 	}
 }
