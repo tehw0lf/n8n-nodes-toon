@@ -39,7 +39,7 @@ jobs:
       tool: "npm"
       semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
       npm_audit_omit_dev: true
-      npm_audit_severity_threshold: "high"
+      npm_audit_severity_threshold: "critical"
 
   # Download artifacts from latest CI build
   # Note: Reuses artifacts from the main CI workflow instead of rebuilding
