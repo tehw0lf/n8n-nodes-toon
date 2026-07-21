@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.0.3** (see `SPEC.md`) with **zero external production dependencies**.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.3** (see `SPEC.md`) with **zero external production dependencies**.
 
 ## Development Setup
 
@@ -81,7 +81,10 @@ nodes/Toon/
 
 ## TOON Specification Compliance
 
-Spec version: **3.0.3** — tracked in `package.json` field `toonSpecVersion`.
+Spec version: **3.3.2** — tracked in `package.json` field `toonSpecVersion`.
+
+Version annotations like *(v3.0.3)* in the table below mark the release that
+introduced a given rule; they are historical and intentionally not updated.
 
 | Spec Section | Feature | Implementation | Status |
 |---|---|---|---|
@@ -183,6 +186,27 @@ An automated GitHub Actions workflow monitors the official TOON specification fo
 - Opens a GitHub issue if changes are detected (with diff summary)
 - Prevents duplicate issues for the same version
 - Adds reminder comments to existing open issues
+
+**Spec versioning nuance:**
+
+The specification lives in its own repository (`toon-format/spec`), separate
+from the reference implementation (`toon-format/toon`). It versions
+independently of its content, so a new release does **not** imply the spec text
+changed — v3.3.0, v3.3.1, and v3.3.2 all ship a byte-identical `SPEC.md`, with
+only repo tooling changing between them.
+
+The workflow therefore compares content as well as version numbers, and labels
+the issue accordingly:
+
+- **Content changed** → "TOON Specification Update Available", full review
+  checklist plus diff.
+- **Content identical** → "TOON Spec Version Bump (no content change)". Only
+  bump `toonSpecVersion` in `package.json` and take a patch bump on our own
+  version; `SPEC.md`, `nodes/Toon/`, and the tests stay untouched.
+
+Note that `toonSpecVersion` tracks the spec repo, which is a different version
+line from the `@toon-format/toon` reference implementation — do not conflate
+the two.
 
 **Manual Trigger:**
 ```bash
