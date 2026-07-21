@@ -9,15 +9,20 @@
 # Workflow Steps:
 # 1. Fetch local SPEC.md version/date
 # 2. Fetch upstream SPEC.md from https://github.com/toon-format/spec
-# 3. Compare versions and dates
+# 3. Compare versions, then compare SPEC.md content
 # 4. If changes detected:
-#    - Generate diff summary
+#    - Generate diff summary (only when the content actually differs)
 #    - Create GitHub issue (or update existing)
 #    - Label with 'spec-update' and 'enhancement'
 #    - Avoid duplicate issues for same version
 #
+# The spec repo versions independently of its content, so a release may ship a
+# byte-identical SPEC.md (tooling-only changes). Those produce a tracking-only
+# issue instead of a false "update the implementation" alarm.
+#
 # Issue Format:
-# - Title: "TOON Specification Update Available: vX.Y"
+# - Title: "TOON Specification Update Available: vX.Y" (content changed), or
+#          "TOON Spec Version Bump (no content change): vX.Y"
 # - Body: Version comparison, diff, action checklist, links
 # - Labels: spec-update, enhancement
 #
@@ -79,16 +84,28 @@ jobs:
           echo "  Local: ${LOCAL_VERSION}"
           echo "  Upstream: ${UPSTREAM_VERSION} (released ${UPSTREAM_DATE})"
 
-          if [ "${LOCAL_VERSION}" != "${UPSTREAM_VERSION}" ]; then
-            echo "changes_detected=true" >> "$GITHUB_OUTPUT"
-            echo "Changes detected!"
-          else
+          if [ "${LOCAL_VERSION}" = "${UPSTREAM_VERSION}" ]; then
             echo "changes_detected=false" >> "$GITHUB_OUTPUT"
             echo "No changes detected"
+            exit 0
+          fi
+
+          echo "changes_detected=true" >> "$GITHUB_OUTPUT"
+
+          # The spec repo versions independently of its content: tooling-only
+          # releases (dependency bumps, CI changes) ship a byte-identical
+          # SPEC.md. Distinguish those from real normative changes so the issue
+          # can state which kind of update this is.
+          if cmp -s SPEC.md /tmp/upstream-spec.md; then
+            echo "spec_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version bump only - SPEC.md is byte-identical upstream"
+          else
+            echo "spec_changed=true" >> "$GITHUB_OUTPUT"
+            echo "SPEC.md content changed upstream"
           fi
 
       - name: Generate diff summary
-        if: steps.compare.outputs.changes_detected == 'true'
+        if: steps.compare.outputs.spec_changed == 'true'
         id: diff
         run: |
           # Generate a summary of changes
@@ -111,47 +128,80 @@ jobs:
           LOCAL_VERSION: ${{ steps.local-version.outputs.version }}
           UPSTREAM_VERSION: ${{ steps.upstream-version.outputs.version }}
           UPSTREAM_DATE: ${{ steps.upstream-version.outputs.date }}
+          SPEC_CHANGED: ${{ steps.compare.outputs.spec_changed }}
           SPEC_DIFF: ${{ steps.diff.outputs.diff }}
         with:
           script: |
             const localVersion = process.env.LOCAL_VERSION;
             const upstreamVersion = process.env.UPSTREAM_VERSION;
             const upstreamDate = process.env.UPSTREAM_DATE;
+            const specChanged = process.env.SPEC_CHANGED === 'true';
             const diff = process.env.SPEC_DIFF;
 
-            const issueTitle = `TOON Specification Update Available: v${upstreamVersion}`;
+            const issueTitle = specChanged
+              ? `TOON Specification Update Available: v${upstreamVersion}`
+              : `TOON Spec Version Bump (no content change): v${upstreamVersion}`;
+
+            const heading = specChanged
+              ? '## 🔔 TOON Specification Update Detected'
+              : '## 📦 TOON Spec Version Bump (no content change)';
+
+            const intro = specChanged
+              ? 'A new version of the TOON specification is available from the official repository.'
+              : [
+                  'A new version of the TOON specification was released, but `SPEC.md` is',
+                  '**byte-for-byte identical** to the copy in this repository. The spec repo',
+                  'versions independently of its content, so this release only changed repo',
+                  'tooling (dependencies, CI). **No implementation changes are required.**'
+                ].join('\n');
+
+            const actionSection = specChanged
+              ? [
+                  '### Action Required',
+                  '',
+                  'Please review the changes in the official specification and update our implementation accordingly:',
+                  '',
+                  '1. Review the upstream specification: https://github.com/toon-format/spec/blob/main/SPEC.md',
+                  '2. Update `SPEC.md` to match the latest version',
+                  '3. Review and update implementation in `nodes/Toon/` if needed',
+                  '4. Update tests to cover any new features or changes',
+                  '5. Update `README.md` to reflect the new version',
+                  '6. Update `package.json` if appropriate',
+                  '',
+                  '### Diff Summary (first 100 lines)',
+                  '',
+                  '<details>',
+                  '<summary>Click to expand diff</summary>',
+                  '',
+                  '```diff',
+                  diff,
+                  '```',
+                  '',
+                  '</details>'
+                ]
+              : [
+                  '### Action Required',
+                  '',
+                  'Tracking-only update:',
+                  '',
+                  '1. Bump `toonSpecVersion` in `package.json` to `' + upstreamVersion + '`',
+                  '2. Bump our own package version (patch only)',
+                  '',
+                  '`SPEC.md`, `nodes/Toon/`, and the tests do not need to change.'
+                ];
 
             const issueBody = [
-              '## 🔔 TOON Specification Update Detected',
+              heading,
               '',
-              'A new version of the TOON specification is available from the official repository.',
+              intro,
               '',
               '### Version Information',
               '',
               `- **Current (Local):** v${localVersion}`,
               `- **Latest (Upstream):** v${upstreamVersion} (${upstreamDate})`,
+              `- **SPEC.md content changed:** ${specChanged ? 'yes' : 'no (identical)'}`,
               '',
-              '### Action Required',
-              '',
-              'Please review the changes in the official specification and update our implementation accordingly:',
-              '',
-              '1. Review the upstream specification: https://github.com/toon-format/spec/blob/main/SPEC.md',
-              '2. Update `SPEC.md` to match the latest version',
-              '3. Review and update implementation in `nodes/Toon/` if needed',
-              '4. Update tests to cover any new features or changes',
-              '5. Update `README.md` to reflect the new version',
-              '6. Update `package.json` if appropriate',
-              '',
-              '### Diff Summary (first 100 lines)',
-              '',
-              '<details>',
-              '<summary>Click to expand diff</summary>',
-              '',
-              '```diff',
-              diff,
-              '```',
-              '',
-              '</details>',
+              ...actionSection,
               '',
               '### Useful Links',
               '',
