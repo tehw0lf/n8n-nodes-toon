@@ -1,5 +1,5 @@
 {
-	"node": "@tehw0lf/n8n-nodes-toon",
+	"node": "@tehw0lf/n8n-nodes-toon.toon",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Development", "Data & Storage"],
