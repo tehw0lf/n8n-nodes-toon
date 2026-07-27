@@ -1,6 +1,6 @@
 /**
  * TOON (Token-Oriented Object Notation) Type Definitions
- * Spec version: 2.0
+ * Spec version: 4.1
  */
 
 /**
@@ -50,17 +50,33 @@ export interface DecoderOptions {
 }
 
 /**
- * Parsed array header information
+ * A single field entry in a tabular or keyed header's field list (§6).
+ * A leaf field has no children; a nested field group carries its own
+ * field entries and declares a nested-uniform column (§9.3).
+ */
+export interface FieldEntry {
+  /** Decoded field name */
+  name: string;
+  /** Nested field group, or null for a leaf field */
+  children: FieldEntry[] | null;
+}
+
+/**
+ * Parsed array or keyed header information (§6)
  */
 export interface HeaderInfo {
-  /** Optional key/name for the array */
+  /** Optional key/name for the array or keyed object */
   key: string | null;
-  /** Expected array length */
+  /** Declared length (array length, or entry count for a keyed header) */
   length: number;
-  /** Active delimiter for this array */
+  /** Active delimiter for this header's scope */
   delimiter: Delimiter;
-  /** Optional field names for tabular data */
-  fields: string[] | null;
+  /** Field list for tabular/keyed data, or null when absent */
+  fields: FieldEntry[] | null;
+  /** True when the bracket segment carries the keyed marker `[N:]` (§9.5) */
+  keyed: boolean;
+  /** Inline content after the header colon (empty when none) */
+  inline: string;
   /** Original line text */
   rawLine: string;
   /** Line number in source */
@@ -79,6 +95,8 @@ export interface ParsedLine {
   lineNumber: number;
   /** Whether line is empty or whitespace */
   isEmpty: boolean;
+  /** Whether a blank line was dropped immediately before this line (§12) */
+  blankBefore: boolean;
 }
 
 /**
