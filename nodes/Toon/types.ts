@@ -61,27 +61,8 @@ export interface FieldEntry {
   children: FieldEntry[] | null;
 }
 
-/**
- * Parsed array or keyed header information (§6)
- */
-export interface HeaderInfo {
-  /** Optional key/name for the array or keyed object */
-  key: string | null;
-  /** Declared length (array length, or entry count for a keyed header) */
-  length: number;
-  /** Active delimiter for this header's scope */
-  delimiter: Delimiter;
-  /** Field list for tabular/keyed data, or null when absent */
-  fields: FieldEntry[] | null;
-  /** True when the bracket segment carries the keyed marker `[N:]` (§9.5) */
-  keyed: boolean;
-  /** Inline content after the header colon (empty when none) */
-  inline: string;
-  /** Original line text */
-  rawLine: string;
-  /** Line number in source */
-  lineNumber: number;
-}
+// Parsed header information lives in ToonUtils as `ParsedHeader`, alongside
+// the §6 grammar that produces it, so there is a single canonical definition.
 
 /**
  * Parsed line with metadata
