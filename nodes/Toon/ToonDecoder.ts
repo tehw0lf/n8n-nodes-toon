@@ -16,6 +16,13 @@ export class ToonDecoder {
   /** Cursor into `lines` */
   private pos = 0;
 
+  /**
+   * Whether parsing is currently inside a header span, i.e. within the rows,
+   * items, or entries of some header's scope. Blank lines are errors there
+   * in strict mode (§12), including inside object scopes nested within.
+   */
+  private inHeaderSpan = false;
+
   constructor(options: DecoderOptions) {
     this.options = options;
   }
@@ -112,6 +119,19 @@ export class ToonDecoder {
     }
 
     return parsed;
+  }
+
+  /**
+   * Run `parse` with the header-span flag set, restoring it afterwards (§12).
+   */
+  private withinHeaderSpan<T>(parse: () => T): T {
+    const previous = this.inHeaderSpan;
+    this.inHeaderSpan = true;
+    try {
+      return parse();
+    } finally {
+      this.inHeaderSpan = previous;
+    }
   }
 
   /**
@@ -260,6 +280,11 @@ export class ToonDecoder {
         }
         this.pos++;
         continue;
+      }
+
+      // Inside a header span, a blank line before any line is an error (§12)
+      if (this.inHeaderSpan) {
+        this.checkBlankInSpan(line, 1);
       }
 
       const { key, value } = this.parseFieldLine(line, depth);
@@ -607,7 +632,7 @@ export class ToonDecoder {
       }
 
       this.checkBlankInSpan(line, items.length);
-      items.push(this.parseListItem(line, itemDepth));
+      items.push(this.withinHeaderSpan(() => this.parseListItem(line, itemDepth)));
     }
 
     this.checkCount(items.length, header.length, 'list items');
@@ -721,6 +746,10 @@ export class ToonDecoder {
       if (this.depthOf(line) !== fieldDepth || this.isListItemLine(line)) {
         break;
       }
+
+      // These fields continue the enclosing array's header span, so a blank
+      // line before one falls inside that span (§12)
+      this.checkBlankInSpan(line, 1);
 
       const { key, value } = this.parseFieldLine(line, fieldDepth);
       this.assignKey(obj, key, line);

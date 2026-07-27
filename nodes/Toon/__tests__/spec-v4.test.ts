@@ -431,6 +431,26 @@ describe('TOON v4.1 conformance', () => {
 
     it('does not let a comment line count as a blank line (§5.1)', () => {
       expect(decode('a[2]{x}:\n  1\n# comment\n  2')).toEqual({ a: [{ x: 1 }, { x: 2 }] });
+      expect(decode('a[2]{x}:\n  1\n# one\n# two\n  2')).toEqual({ a: [{ x: 1 }, { x: 2 }] });
+    });
+
+    it('still errors when a blank accompanies a comment inside a span', () => {
+      expect(() => decode('a[2]{x}:\n  1\n\n# c\n  2')).toThrow();
+      expect(() => decode('a[2]{x}:\n  1\n# c\n\n  2')).toThrow();
+    });
+
+    it('errors on a blank between a list-item object\'s own fields (§10, §12)', () => {
+      expect(() => decode('a[1]:\n  - id: 1\n\n    n: 2')).toThrow();
+    });
+
+    it('errors on a blank inside an object nested within a span', () => {
+      expect(() => decode('a[1]:\n  - m:\n      x: 1\n\n      y: 2')).toThrow();
+      expect(() => decode('o:\n  u[2:]{x}:\n    a: 1\n\n    b: 2')).toThrow();
+    });
+
+    it('allows blanks in plain object scopes outside any span', () => {
+      expect(decode('a: 1\n\nb:\n\n  c: 2')).toEqual({ a: 1, b: { c: 2 } });
+      expect(decode('a[1]:\n  - id: 1\n\nb: 2')).toEqual({ a: [{ id: 1 }], b: 2 });
     });
   });
 
