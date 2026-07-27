@@ -52,6 +52,10 @@ export class ToonDecoder {
     const rawLines = withoutBom.split('\n');
     const parsed: ParsedLine[] = [];
 
+    // Tracks whether a blank line was dropped immediately before the next
+    // retained line, so §12's header-span check can still see it
+    let blankBefore = false;
+
     for (let i = 0; i < rawLines.length; i++) {
       // A trailing CR is part of the line terminator, accepting CRLF (§12)
       let line = rawLines[i].replace(/\r$/, '');
@@ -67,8 +71,10 @@ export class ToonDecoder {
         continue;
       }
 
-      // Blank lines never create or close structure (§12)
+      // Blank lines never create or close structure (§12), but a blank
+      // falling inside a header span is a strict-mode error, so remember it
       if (line.trim() === '') {
+        blankBefore = true;
         continue;
       }
 
@@ -99,10 +105,29 @@ export class ToonDecoder {
         indent,
         lineNumber,
         isEmpty: false,
+        blankBefore,
       });
+
+      blankBefore = false;
     }
 
     return parsed;
+  }
+
+  /**
+   * Reject a blank line falling inside a header span in strict mode (§12).
+   *
+   * A header span runs from a scope's first row, item, or entry line through
+   * the last line of its content, so this applies only once at least one such
+   * line has been read; blanks between a header and its first line are ignored.
+   */
+  private checkBlankInSpan(line: ParsedLine, seen: number): void {
+    if (this.options.strict && seen > 0 && line.blankBefore) {
+      throw new ToonDecodingError('Blank line inside a header span', {
+        lineNumber: line.lineNumber,
+        line: line.content,
+      });
+    }
   }
 
   /**
@@ -425,6 +450,8 @@ export class ToonDecoder {
         break;
       }
 
+      this.checkBlankInSpan(line, rows.length);
+
       const cells = utils.splitDelimited(line.content, header.delimiter);
       this.checkWidth(cells.length, leafCount, line);
       rows.push(this.materializeRow(cells, fields, line));
@@ -529,6 +556,8 @@ export class ToonDecoder {
         continue;
       }
 
+      this.checkBlankInSpan(line, count);
+
       const entryKey = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
       const rest = utils.trimSpaces(line.content.slice(colonIndex + 1));
 
@@ -577,6 +606,7 @@ export class ToonDecoder {
         continue;
       }
 
+      this.checkBlankInSpan(line, items.length);
       items.push(this.parseListItem(line, itemDepth));
     }
 
@@ -616,6 +646,7 @@ export class ToonDecoder {
       indent: line.indent + 2,
       lineNumber: line.lineNumber,
       isEmpty: false,
+      blankBefore: false,
     };
 
     const header = this.tryParseHeader(inner);

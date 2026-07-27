@@ -95,6 +95,8 @@ export interface ParsedLine {
   lineNumber: number;
   /** Whether line is empty or whitespace */
   isEmpty: boolean;
+  /** Whether a blank line was dropped immediately before this line (§12) */
+  blankBefore: boolean;
 }
 
 /**

@@ -6,11 +6,57 @@
 import type { Delimiter, FieldEntry } from './types';
 
 /**
+ * Reject host strings carrying an unpaired surrogate per §3.
+ *
+ * Such a string is not representable in TOON, and encoders MUST error rather
+ * than emit it or silently substitute U+FFFD.
+ */
+/**
+ * Whether a host string is representable in TOON, i.e. carries no unpaired
+ * surrogate (§3)
+ */
+export function isRepresentableString(str: string): boolean {
+  try {
+    assertNoLoneSurrogate(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function assertNoLoneSurrogate(str: string): void {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+
+    // High surrogate: must be followed by a low surrogate
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+      if (next < 0xdc00 || next > 0xdfff) {
+        throw new Error(
+          `Unpaired surrogate at position ${i}: string is not representable in TOON`,
+        );
+      }
+      i++;
+      continue;
+    }
+
+    // A low surrogate not preceded by a high surrogate is unpaired
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new Error(
+        `Unpaired surrogate at position ${i}: string is not representable in TOON`,
+      );
+    }
+  }
+}
+
+/**
  * Escape string according to TOON spec §7.1
  * - U+0000–U+001F: \uXXXX (except \n, \r, \t which use named escapes)
  * - backslash → \\, quote → \", LF → \n, CR → \r, HTAB → \t
  */
 export function escapeString(str: string): string {
+  assertNoLoneSurrogate(str);
+
   let result = '';
   for (let i = 0; i < str.length; i++) {
     const ch = str[i];
@@ -1005,7 +1051,12 @@ export function delimiterSymbol(delimiter: Delimiter): string {
  * Encode a key per §7.3, quoting and escaping when required
  */
 export function encodeKey(key: string): string {
-  return keyNeedsQuoting(key) ? `"${escapeString(key)}"` : key;
+  if (keyNeedsQuoting(key)) {
+    return `"${escapeString(key)}"`;
+  }
+  // Unquoted keys skip escapeString, so check representability here (§3)
+  assertNoLoneSurrogate(key);
+  return key;
 }
 
 /**

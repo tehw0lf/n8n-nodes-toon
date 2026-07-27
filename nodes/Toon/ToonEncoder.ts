@@ -4,6 +4,7 @@
  */
 
 import type { EncoderOptions, Delimiter, FieldEntry } from './types';
+import { ToonEncodingError } from './types';
 import * as utils from './ToonUtils';
 
 export class ToonEncoder {
@@ -21,6 +22,9 @@ export class ToonEncoder {
   encode(value: unknown): string {
     // Normalize value per §3
     const normalized = this.normalizeValue(value);
+
+    // Reject unrepresentable strings before emitting anything (§3)
+    this.assertRepresentable(normalized, '');
 
     // Apply key folding if enabled
     const folded =
@@ -85,6 +89,39 @@ export class ToonEncoder {
   }
 
   /**
+   * Walk a normalized value and reject strings or keys carrying an unpaired
+   * surrogate, which are not representable in TOON (§3).
+   */
+  private assertRepresentable(value: unknown, path: string): void {
+    if (typeof value === 'string') {
+      if (!utils.isRepresentableString(value)) {
+        throw new ToonEncodingError(
+          'String contains an unpaired surrogate and is not representable in TOON',
+          { path, value },
+        );
+      }
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => this.assertRepresentable(item, `${path}[${index}]`));
+      return;
+    }
+
+    if (utils.isPlainObject(value)) {
+      for (const [key, item] of Object.entries(value)) {
+        if (!utils.isRepresentableString(key)) {
+          throw new ToonEncodingError(
+            'Key contains an unpaired surrogate and is not representable in TOON',
+            { path, key },
+          );
+        }
+        this.assertRepresentable(item, path === '' ? key : `${path}.${key}`);
+      }
+    }
+  }
+
+  /**
    * Encode the document root per §5
    */
   private encodeRoot(value: unknown): string[] {
@@ -122,9 +159,12 @@ export class ToonEncoder {
       return utils.canonicalizeNumber(value);
     }
     if (typeof value === 'string') {
-      return utils.needsQuoting(value, delimiter, delimiter, 'array')
-        ? `"${utils.escapeString(value)}"`
-        : value;
+      if (utils.needsQuoting(value, delimiter, delimiter, 'array')) {
+        return `"${utils.escapeString(value)}"`;
+      }
+      // Unquoted values skip escapeString, so check representability here (§3)
+      utils.assertNoLoneSurrogate(value);
+      return value;
     }
     return 'null';
   }

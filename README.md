@@ -353,6 +353,25 @@ The encoder selects a form from each value's shape and position, as §1.4 requir
 - Empty arrays are `key: []` in field position and `[]` at the root; the legacy `key[0]:` form is accepted on decode but never emitted.
 - Field order follows the first object's key encounter order, so decoded elements of tabular and keyed tabular forms carry the header's field order (§2).
 
+### Documented Implementation Behavior
+
+The specification requires implementations to document the following (§2, §3, §4, §13.2):
+
+**Host-type normalization (§3).** Values are normalized to the JSON data model before encoding:
+
+| Host value | Encoded as |
+|---|---|
+| `NaN`, `Infinity`, `-Infinity` | `null` |
+| `undefined`, functions, symbols | `null` |
+| Objects with a `toJSON()` method | the normalized result of `toJSON()`, applied recursively |
+| `Date` | ISO 8601 string via the built-in `toJSON()` (quoted, since it contains colons) |
+
+**Numeric domain and out-of-range policy (§4).** Numbers are IEEE-754 doubles, the JavaScript numeric domain. Decoded numeric tokens outside that domain return the nearest approximate double rather than erroring or returning a string; values beyond `Number.MAX_SAFE_INTEGER` may therefore lose precision on round-trip. Tokens are classified by the §4 number grammar, not by `Number()`, so `.5`, `1.`, `+5`, `0x10`, `Infinity`, and `NaN` all decode as strings.
+
+**Object key order (§2).** Key order is preserved as encountered, except that tabular and keyed tabular forms reorder to the header's field order. One deviation is inherent to the JavaScript object model: **integer-like keys are hoisted** and ordered numerically ahead of string keys, so a document with keys `b`, `1`, `a` decodes to an object ordered `1`, `b`, `a`. Array order is always preserved.
+
+**Prototype keys (§15).** Decoded keys are installed with `Object.defineProperty`, so `__proto__`, `constructor`, and `prototype` become ordinary own data properties and decoding never mutates a prototype chain.
+
 ### Round-Trip Guarantee
 
 All JSON data can be encoded to TOON and decoded back to JSON with full fidelity. The implementation passes all conformance requirements for encoders and decoders per the specification.

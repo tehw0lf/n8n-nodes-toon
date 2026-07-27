@@ -9,6 +9,7 @@
 import { ToonEncoder } from '../ToonEncoder';
 import { ToonDecoder } from '../ToonDecoder';
 import type { DecoderOptions, EncoderOptions } from '../types';
+import { ToonEncodingError } from '../types';
 
 const encoderOptions: EncoderOptions = {
   indent: 2,
@@ -396,6 +397,155 @@ describe('TOON v4.1 conformance', () => {
       };
       expect(Object.prototype.hasOwnProperty.call(result.items[0], '__proto__')).toBe(true);
       expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+    });
+  });
+
+  describe('blank lines and header spans (§12)', () => {
+    it('errors on a blank line between tabular rows in strict mode', () => {
+      expect(() => decode('a[2]{x}:\n  1\n\n  2')).toThrow();
+    });
+
+    it('errors on a blank line between list items in strict mode', () => {
+      expect(() => decode('a[2]:\n  - 1\n\n  - 2')).toThrow();
+    });
+
+    it('errors on a blank line between keyed entry rows in strict mode', () => {
+      expect(() => decode('u[2:]{x}:\n  a: 1\n\n  b: 2')).toThrow();
+    });
+
+    it('ignores a blank line between a header and its first row', () => {
+      expect(decode('a[2]{x}:\n\n  1\n  2')).toEqual({ a: [{ x: 1 }, { x: 2 }] });
+    });
+
+    it('ignores a blank line after a scope\'s content', () => {
+      expect(decode('a[1]{x}:\n  1\n\nb: 2')).toEqual({ a: [{ x: 1 }], b: 2 });
+    });
+
+    it('ignores blank lines between top-level fields', () => {
+      expect(decode('a: 1\n\nb: 2')).toEqual({ a: 1, b: 2 });
+    });
+
+    it('ignores blank lines inside a header span in non-strict mode', () => {
+      expect(decodeLax('a[2]{x}:\n  1\n\n  2')).toEqual({ a: [{ x: 1 }, { x: 2 }] });
+    });
+
+    it('does not let a comment line count as a blank line (§5.1)', () => {
+      expect(decode('a[2]{x}:\n  1\n# comment\n  2')).toEqual({ a: [{ x: 1 }, { x: 2 }] });
+    });
+  });
+
+  describe('numbers and escapes', () => {
+    it('emits canonical decimal form inside the canonical range (§2)', () => {
+      expect(encode({ a: 1e6 })).toBe('a: 1000000');
+      expect(encode({ a: 1e-6 })).toBe('a: 0.000001');
+      expect(encode({ a: 1.5000 })).toBe('a: 1.5');
+      expect(encode({ a: 1.0 })).toBe('a: 1');
+      expect(encode({ a: -0 })).toBe('a: 0');
+    });
+
+    it('may use exponent notation outside the canonical range (§2)', () => {
+      expect(encode({ a: 1e21 })).toBe('a: 1e+21');
+      expect(encode({ a: 1e-7 })).toBe('a: 1e-7');
+    });
+
+    it('escapes control characters and quotes per §7.1', () => {
+      expect(encode({ a: '\u0001' })).toBe('a: "\\u0001"');
+      expect(encode({ a: 'x\ty' })).toBe('a: "x\\ty"');
+      expect(encode({ a: 'x\ny' })).toBe('a: "x\\ny"');
+    });
+
+    it('rejects invalid escapes and lone surrogates on decode (§7.1)', () => {
+      expect(() => decode('a: "\\ud800"')).toThrow();
+      expect(() => decode('a: "\\q"')).toThrow();
+      expect(() => decode('a: "\\u12"')).toThrow();
+      expect(() => decode('a: "abc')).toThrow();
+    });
+
+    it('normalizes NaN, Infinity, and undefined to null (§3)', () => {
+      expect(encode({ a: NaN, b: Infinity, c: -Infinity, d: undefined })).toBe(
+        'a: null\nb: null\nc: null\nd: null',
+      );
+    });
+
+    it('honors toJSON() during normalization (§3)', () => {
+      // The ISO string contains colons, so §7.2 requires quoting
+      expect(encode({ a: new Date(Date.UTC(2025, 0, 1)) })).toBe(
+        'a: "2025-01-01T00:00:00.000Z"',
+      );
+    });
+  });
+
+  describe('delimiter scoping (§11.2)', () => {
+    it('does not inherit a parent delimiter into a nested header', () => {
+      expect(decode('a[1|]:\n  - [2]: 1,2')).toEqual({ a: [[1, 2]] });
+    });
+
+    it('lets a nested header declare its own delimiter', () => {
+      expect(decode('a[1]:\n  - [2|]: 1|2')).toEqual({ a: [[1, 2]] });
+    });
+  });
+
+  describe('unrepresentable strings (§3)', () => {
+    it.each([
+      ['a lone high surrogate value', { a: '\uD800' }],
+      ['a lone low surrogate value', { a: '\uDC00' }],
+      ['a high surrogate not followed by a low one', { a: '\uD800A' }],
+      ['a lone surrogate in a nested value', { a: [{ b: '\uD800x' }] }],
+      ['a lone surrogate in a key', { '\uD800': 1 }],
+    ])('errors rather than emitting %s', (_label, value) => {
+      expect(() => encode(value)).toThrow(ToonEncodingError);
+    });
+
+    it('accepts valid surrogate pairs', () => {
+      expect(encode({ a: '👋' })).toBe('a: 👋');
+      expect(encode({ '👋': 1 })).toBe('"👋": 1');
+    });
+  });
+
+  describe('encoder output invariants (§13.1)', () => {
+    it('emits LF only, never CR', () => {
+      expect(encode({ a: { b: 1 }, c: [1, 2] })).not.toContain('\r');
+    });
+
+    it('quotes keys needing quotes in every context, including headers (§7.3)', () => {
+      expect(encode({ 'my-key': [1, 2] })).toBe('"my-key"[2]: 1,2');
+      expect(encode({ 'ü': 1 })).toBe('"ü": 1');
+      // Dots are permitted in the unquoted-key pattern
+      expect(encode({ 'a.b': 1 })).toBe('a.b: 1');
+    });
+
+    it('never emits the bare "- []" item form (§9.2)', () => {
+      expect(encode({ a: [[]] })).not.toContain('- []');
+      expect(encode({ a: [[]] })).toBe('a[1]:\n  - [0]:');
+    });
+
+    it('still accepts "- []" on decode (§9.2)', () => {
+      expect(decode('a[1]:\n  - []')).toEqual({ a: [[]] });
+    });
+  });
+
+  describe('key order (§2)', () => {
+    it('preserves object key encounter order', () => {
+      expect(encode({ zebra: 1, apple: 2 })).toBe('zebra: 1\napple: 2');
+      expect(Object.keys(decode('z: 1\na: 2\nm: 3') as object)).toEqual(['z', 'a', 'm']);
+    });
+
+    it('reorders tabular rows to the header field order', () => {
+      const decoded = decode(encode([{ x: 1, y: 2 }, { y: 4, x: 3 }])) as Record<string, unknown>[];
+      expect(Object.keys(decoded[1])).toEqual(['x', 'y']);
+    });
+
+    it('reorders keyed entry values to the header field order (§9.5)', () => {
+      const decoded = decode(encode({ a: { p: 1, q: 2 }, b: { q: 4, p: 3 } })) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      expect(Object.keys(decoded)).toEqual(['a', 'b']);
+      expect(Object.keys(decoded.b)).toEqual(['p', 'q']);
+    });
+
+    it('preserves array order', () => {
+      expect(decode('[3]: 3,1,2')).toEqual([3, 1, 2]);
     });
   });
 });
