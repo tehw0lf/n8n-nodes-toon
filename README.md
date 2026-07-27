@@ -322,7 +322,7 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 ## Specification Compliance
 
-This node implements **TOON Specification v4.1** in full: every normative requirement of Sections 1–16 for encoders and decoders.
+This node implements **TOON Specification v4.1** in full: every normative requirement of Sections 1–16 for encoders and decoders, using the default options. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
 
 ### Implemented Features
 
@@ -340,7 +340,10 @@ This node implements **TOON Specification v4.1** in full: every normative requir
 - CRLF input, byte-order-mark removal, and trailing-space handling (§12)
 - Strict mode validation per the §14 checklist (counts, row widths, header syntax, duplicate keys, indentation)
 
-✅ **Optional Features**
+### Non-Spec Extensions
+
+⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.1 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
+
 - **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
 

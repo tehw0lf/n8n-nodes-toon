@@ -85,8 +85,9 @@ export class ToonDecoder {
         continue;
       }
 
-      // Tabs MUST NOT be used for indentation (§12)
-      if (/^\t/.test(line)) {
+      // Tabs MUST NOT be used for indentation (§12). A tab anywhere in the
+      // leading whitespace counts, not just one in column 0.
+      if (/^[ \t]*\t/.test(line)) {
         if (this.options.strict) {
           throw new ToonDecodingError('Tabs not allowed in indentation', {
             lineNumber,
@@ -94,7 +95,7 @@ export class ToonDecoder {
           });
         }
         // Non-strict: leading tabs are removed before classification (§12)
-        line = line.replace(/^\t+/, '');
+        line = line.replace(/^[ \t]+/, (ws) => ws.replace(/\t/g, ''));
       }
 
       const indent = line.match(/^( *)/)?.[1].length ?? 0;

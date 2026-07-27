@@ -146,6 +146,16 @@ describe('TOON v4.1 conformance', () => {
     it('accepts a trailing newline at end of file', () => {
       expect(decode('a: 1\n')).toEqual({ a: 1 });
     });
+
+    it('rejects a tab anywhere in the indentation, not just column 0 (§12)', () => {
+      expect(() => decode('a:\n\tb: 1')).toThrow(ToonDecodingError);
+      expect(() => decode('a:\n  \tb: 1')).toThrow(ToonDecodingError);
+      expect(() => decode('a:\n \t b: 1')).toThrow(ToonDecodingError);
+    });
+
+    it('strips tabs from indentation in non-strict mode (§12)', () => {
+      expect(decodeLax('a:\n  \tb: 1')).toEqual({ a: { b: 1 } });
+    });
   });
 
   describe('keyed tabular decoding (§9.5)', () => {
