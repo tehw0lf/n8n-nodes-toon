@@ -139,11 +139,16 @@ export class ToonDecoder {
    * Reject a blank line falling inside a header span in strict mode (§12).
    *
    * A header span runs from a scope's first row, item, or entry line through
-   * the last line of its content, so this applies only once at least one such
-   * line has been read; blanks between a header and its first line are ignored.
+   * the last line of its content. A blank before this scope's own first line
+   * is therefore outside its span — but still inside any enclosing span, since
+   * that outer scope's content is already under way.
+   *
+   * @param seen how many rows, items, or entries this scope has read so far
    */
   private checkBlankInSpan(line: ParsedLine, seen: number): void {
-    if (this.options.strict && seen > 0 && line.blankBefore) {
+    const insideSpan = seen > 0 || this.inHeaderSpan;
+
+    if (this.options.strict && insideSpan && line.blankBefore) {
       throw new ToonDecodingError('Blank line inside a header span', {
         lineNumber: line.lineNumber,
         line: line.content,
@@ -283,10 +288,9 @@ export class ToonDecoder {
         continue;
       }
 
-      // Inside a header span, a blank line before any line is an error (§12)
-      if (this.inHeaderSpan) {
-        this.checkBlankInSpan(line, 1);
-      }
+      // An object scope reads no rows of its own, so it is inside a span only
+      // when an enclosing scope's content is under way (§12)
+      this.checkBlankInSpan(line, 0);
 
       const { key, value } = this.parseFieldLine(line, depth);
       this.assignKey(obj, key, line);
@@ -748,8 +752,7 @@ export class ToonDecoder {
         break;
       }
 
-      // These fields continue the enclosing array's header span, so a blank
-      // line before one falls inside that span (§12)
+      // These fields continue the enclosing array's header span (§12)
       this.checkBlankInSpan(line, 1);
 
       const { key, value } = this.parseFieldLine(line, fieldDepth);

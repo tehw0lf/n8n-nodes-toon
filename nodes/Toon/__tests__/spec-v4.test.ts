@@ -458,6 +458,28 @@ describe('TOON v4.1 conformance', () => {
       expect(() => decode('o:\n  u[2:]{x}:\n    a: 1\n\n    b: 2')).toThrow(ToonDecodingError);
     });
 
+    it('errors on a blank before the first row of a nested scope inside a span', () => {
+      // The blank precedes this scope's own first row, so it is outside that
+      // scope's span - but the enclosing list item's span is already open
+      expect(() => decode('a[1]:\n  - t[1]{x}:\n\n      1')).toThrow(ToonDecodingError);
+      expect(() => decode('a[1]:\n  - t[1]:\n\n      - 1')).toThrow(ToonDecodingError);
+      expect(() => decode('a[1]:\n  - t[2:]{x}:\n\n      p: 1\n      q: 2')).toThrow(
+        ToonDecodingError,
+      );
+    });
+
+    it('propagates the span through object fields nested inside an item', () => {
+      expect(() => decode('a[1]:\n  - o:\n      t[1]{x}:\n\n        1')).toThrow(
+        ToonDecodingError,
+      );
+    });
+
+    it('allows a blank before a first row when no enclosing span is open', () => {
+      expect(decode('o:\n  t[2]{x}:\n\n    1\n    2')).toEqual({ o: { t: [{ x: 1 }, { x: 2 }] } });
+      expect(decode('a[2]:\n\n  - 1\n  - 2')).toEqual({ a: [1, 2] });
+      expect(decode('u[2:]{x}:\n\n  a: 1\n  b: 2')).toEqual({ u: { a: { x: 1 }, b: { x: 2 } } });
+    });
+
     it('allows blanks in plain object scopes outside any span', () => {
       expect(decode('a: 1\n\nb:\n\n  c: 2')).toEqual({ a: 1, b: { c: 2 } });
       expect(decode('a[1]:\n  - id: 1\n\nb: 2')).toEqual({ a: [{ id: 1 }], b: 2 });
