@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v3.3** (see `SPEC.md`) with **zero external production dependencies**.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v4.1** (see `SPEC.md`) with **zero external production dependencies**. Archived copies of earlier spec revisions are kept alongside it as `SPEC-v*-archived.md`.
 
 ## Development Setup
 

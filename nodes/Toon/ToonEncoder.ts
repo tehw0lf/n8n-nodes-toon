@@ -1,9 +1,9 @@
 /**
  * TOON Encoder - Converts JSON to TOON format
- * Implements TOON Specification v3.3
+ * Implements TOON Specification v4.1
  */
 
-import type { EncoderOptions, Delimiter } from './types';
+import type { EncoderOptions, Delimiter, FieldEntry } from './types';
 import * as utils from './ToonUtils';
 
 export class ToonEncoder {
@@ -28,11 +28,8 @@ export class ToonEncoder {
         ? this.foldKeys(normalized)
         : normalized;
 
-    // Encode the value
-    const lines = this.encodeValue(folded, 0);
-
     // Join lines without trailing newline per §12
-    return lines.join('\n');
+    return this.encodeRoot(folded).join('\n');
   }
 
   /**
@@ -88,238 +85,341 @@ export class ToonEncoder {
   }
 
   /**
-   * Encode a value at a given depth
+   * Encode the document root per §5
    */
-  private encodeValue(value: unknown, depth: number, activeDelimiter?: Delimiter): string[] {
-    if (value === null) {
-      return ['null'];
-    }
-
-    if (typeof value === 'boolean') {
-      return [value.toString()];
-    }
-
-    if (typeof value === 'number') {
-      return [utils.canonicalizeNumber(value)];
-    }
-
-    if (typeof value === 'string') {
-      return [this.encodeString(value, activeDelimiter || this.documentDelimiter, 'object')];
-    }
-
+  private encodeRoot(value: unknown): string[] {
     if (Array.isArray(value)) {
-      return this.encodeArray(value, null, depth);
+      // Empty root arrays are the bare token "[]" (§9.1)
+      if (value.length === 0) {
+        return ['[]'];
+      }
+      return this.encodeArray(value, null, 0);
     }
 
     if (utils.isPlainObject(value)) {
-      return this.encodeObject(value, depth);
-    }
-
-    // Fallback for unknown types
-    return ['null'];
-  }
-
-  /**
-   * Encode a string value with proper quoting
-   */
-  private encodeString(value: string, delimiter: Delimiter, context: 'array' | 'object'): string {
-    if (utils.needsQuoting(value, delimiter, this.documentDelimiter, context)) {
-      return `"${utils.escapeString(value)}"`;
-    }
-    return value;
-  }
-
-  /**
-   * Encode an object
-   */
-  private encodeObject(obj: Record<string, unknown>, depth: number): string[] {
-    const lines: string[] = [];
-    const indentStr = utils.indent(depth, this.options.indent);
-
-    for (const [key, value] of Object.entries(obj)) {
-      // Encode key per §7.3
-      const encodedKey = utils.keyNeedsQuoting(key)
-        ? `"${utils.escapeString(key)}"`
-        : key;
-
-      if (value === null) {
-        lines.push(`${indentStr}${encodedKey}: null`);
-      } else if (typeof value === 'boolean') {
-        lines.push(`${indentStr}${encodedKey}: ${value.toString()}`);
-      } else if (typeof value === 'number') {
-        lines.push(`${indentStr}${encodedKey}: ${utils.canonicalizeNumber(value)}`);
-      } else if (typeof value === 'string') {
-        const encodedValue = this.encodeString(value, this.documentDelimiter, 'object');
-        lines.push(`${indentStr}${encodedKey}: ${encodedValue}`);
-      } else if (Array.isArray(value)) {
-        // Array as object property
-        const arrayLines = this.encodeArray(value, key, depth);
-        lines.push(...arrayLines);
-      } else if (utils.isPlainObject(value)) {
-        // Nested object
-        lines.push(`${indentStr}${encodedKey}:`);
-        const nestedLines = this.encodeObject(value as Record<string, unknown>, depth + 1);
-        lines.push(...nestedLines);
-      } else {
-        lines.push(`${indentStr}${encodedKey}: null`);
+      // An empty object at the root yields an empty document (§8)
+      if (Object.keys(value).length === 0) {
+        return [];
       }
+      return this.encodeObject(value, 0);
     }
 
-    return lines;
+    // Root primitive
+    return [this.encodePrimitive(value, this.documentDelimiter)];
   }
 
   /**
-   * Encode an array with optional key
+   * Encode a primitive value (§2, §7.2)
    */
-  private encodeArray(arr: unknown[], key: string | null, depth: number): string[] {
-    // Determine if array should be encoded as tabular per §9.3
-    if (utils.isUniformArray(arr)) {
-      return this.encodeTabular(arr, key, depth);
-    }
-
-    // Check if array contains only primitives
-    if (utils.isArrayOfPrimitives(arr)) {
-      return this.encodePrimitiveArray(arr, key, depth);
-    }
-
-    // Mixed array: encode in expanded form
-    return this.encodeMixedArray(arr, key, depth);
-  }
-
-  /**
-   * Encode an array of primitives (inline or expanded based on size)
-   */
-  private encodePrimitiveArray(arr: unknown[], key: string | null, depth: number): string[] {
-    const lines: string[] = [];
-    const indentStr = utils.indent(depth, this.options.indent);
-    const delimiter = this.options.delimiter;
-
-    // Encode array header per §6
-    const delimiterSym = delimiter === ',' ? '' : delimiter === '\t' ? '\t' : '|';
-    const keyPart = key ? (utils.keyNeedsQuoting(key) ? `"${utils.escapeString(key)}"` : key) : '';
-    const header = `${indentStr}${keyPart}[${arr.length}${delimiterSym}]:`;
-
-    // Encode values
-    const encodedValues = arr.map((item) =>
-      this.encodePrimitiveValue(item, delimiter),
-    );
-
-    // Try inline first
-    const inlineValues = encodedValues.join(delimiter === ',' ? ', ' : delimiter);
-    const inlineLine = `${header} ${inlineValues}`;
-
-    // Use inline if reasonable length (< 80 chars)
-    if (inlineLine.length < 80 && !inlineValues.includes('\n')) {
-      return [inlineLine];
-    }
-
-    // Use expanded form
-    lines.push(header);
-    const valueIndentStr = utils.indent(depth + 1, this.options.indent);
-    for (const encoded of encodedValues) {
-      lines.push(`${valueIndentStr}${encoded}`);
-    }
-
-    return lines;
-  }
-
-  /**
-   * Encode a primitive value for array context
-   */
-  private encodePrimitiveValue(value: unknown, delimiter: Delimiter): string {
-    if (value === null) {
+  private encodePrimitive(value: unknown, delimiter: Delimiter): string {
+    if (value === null || value === undefined) {
       return 'null';
     }
     if (typeof value === 'boolean') {
-      return value.toString();
+      return value ? 'true' : 'false';
     }
     if (typeof value === 'number') {
       return utils.canonicalizeNumber(value);
     }
     if (typeof value === 'string') {
-      return this.encodeString(value, delimiter, 'array');
+      return utils.needsQuoting(value, delimiter, delimiter, 'array')
+        ? `"${utils.escapeString(value)}"`
+        : value;
     }
     return 'null';
   }
 
   /**
-   * Encode a tabular array (uniform objects with primitive values)
+   * Render a header's bracket segment and optional field list (§6)
    */
-  private encodeTabular(
-    arr: Record<string, unknown>[],
+  private header(
+    key: string | null,
+    length: number,
+    fields: FieldEntry[] | null,
+    keyed: boolean,
+  ): string {
+    const keyPart = key === null ? '' : utils.encodeKey(key);
+    const keyedMarker = keyed ? ':' : '';
+    const delimSym = utils.delimiterSymbol(this.documentDelimiter);
+    const fieldsPart =
+      fields === null ? '' : `{${utils.serializeFields(fields, this.documentDelimiter)}}`;
+
+    return `${keyPart}[${length}${keyedMarker}${delimSym}]${fieldsPart}:`;
+  }
+
+  /**
+   * Encode an object's fields (§8), collapsing to keyed tabular form when
+   * detection succeeds (§9.5)
+   */
+  private encodeObject(obj: Record<string, unknown>, depth: number): string[] {
+    // An object whose values are uniform objects becomes a keyed table (§9.5)
+    const keyedFields = utils.getKeyedTabularFields(obj);
+    if (keyedFields !== null) {
+      return this.encodeKeyedTabular(obj, keyedFields, null, depth);
+    }
+
+    const lines: string[] = [];
+    for (const [key, value] of Object.entries(obj)) {
+      lines.push(...this.encodeField(key, value, depth));
+    }
+    return lines;
+  }
+
+  /**
+   * Encode a single object field (§8)
+   */
+  private encodeField(key: string, value: unknown, depth: number): string[] {
+    const indentStr = utils.indent(depth, this.options.indent);
+    const encodedKey = utils.encodeKey(key);
+
+    if (Array.isArray(value)) {
+      // Empty arrays in object-field position use the explicit form (§9.1)
+      if (value.length === 0) {
+        return [`${indentStr}${encodedKey}: []`];
+      }
+      return this.encodeArray(value, key, depth);
+    }
+
+    if (utils.isPlainObject(value)) {
+      const nested = value as Record<string, unknown>;
+
+      // A nested object that qualifies collapses into a keyed table (§9.5)
+      const keyedFields = utils.getKeyedTabularFields(nested);
+      if (keyedFields !== null) {
+        return this.encodeKeyedTabular(nested, keyedFields, key, depth);
+      }
+
+      // Nested or empty objects: "key:" alone, fields at depth + 1 (§8)
+      const lines = [`${indentStr}${encodedKey}:`];
+      lines.push(...this.encodeObject(nested, depth + 1));
+      return lines;
+    }
+
+    // Object field values quote against the document delimiter (§11.1)
+    const encodedValue = this.encodePrimitive(value, this.documentDelimiter);
+    return [`${indentStr}${encodedKey}: ${encodedValue}`];
+  }
+
+  /**
+   * Encode an object in keyed tabular form (§9.5)
+   */
+  private encodeKeyedTabular(
+    obj: Record<string, unknown>,
+    fields: FieldEntry[],
     key: string | null,
     depth: number,
   ): string[] {
-    const lines: string[] = [];
-    const delimiter = this.options.delimiter;
+    const indentStr = utils.indent(depth, this.options.indent);
+    const entries = Object.entries(obj);
+
+    const lines = [`${indentStr}${this.header(key, entries.length, fields, true)}`];
+    lines.push(...this.entryRows(entries, fields, depth + 1));
+    return lines;
+  }
+
+  /**
+   * Render the entry rows of a keyed table at a given depth (§9.5)
+   */
+  private entryRows(
+    entries: [string, unknown][],
+    fields: FieldEntry[],
+    depth: number,
+  ): string[] {
+    const rowIndent = utils.indent(depth, this.options.indent);
+
+    return entries.map(([entryKey, entryValue]) => {
+      const cells = utils
+        .collectLeafValues(entryValue as Record<string, unknown>, fields)
+        .map((cell) => this.encodePrimitive(cell, this.documentDelimiter));
+
+      return `${rowIndent}${utils.encodeKey(entryKey)}: ${cells.join(this.documentDelimiter)}`;
+    });
+  }
+
+  /**
+   * Encode an array, selecting the form from its shape per §9
+   */
+  private encodeArray(arr: unknown[], key: string | null, depth: number): string[] {
+    // Tabular form when every column is uniform-primitive or nested-uniform (§9.3)
+    const fields = utils.getTabularFields(arr);
+    if (fields !== null) {
+      return this.encodeTabular(arr as Record<string, unknown>[], fields, key, depth);
+    }
+
+    // Non-empty primitive arrays render inline on the header line (§9.1)
+    if (arr.every((item) => utils.isPrimitive(item))) {
+      return this.encodeInlineArray(arr, key, depth);
+    }
+
+    // Everything else uses list form (§9.2, §9.4)
+    return this.encodeListArray(arr, key, depth);
+  }
+
+  /**
+   * Encode a primitive array inline per §9.1
+   */
+  private encodeInlineArray(arr: unknown[], key: string | null, depth: number): string[] {
+    const indentStr = utils.indent(depth, this.options.indent);
+    const values = arr.map((item) => this.encodePrimitive(item, this.documentDelimiter));
+
+    return [
+      `${indentStr}${this.header(key, arr.length, null, false)} ${values.join(this.documentDelimiter)}`,
+    ];
+  }
+
+  /**
+   * Encode an array of uniform objects in tabular form per §9.3
+   */
+  private encodeTabular(
+    arr: Record<string, unknown>[],
+    fields: FieldEntry[],
+    key: string | null,
+    depth: number,
+  ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
 
-    // Get field names from first object
-    const fields = Object.keys(arr[0]).sort();
+    const lines = [`${indentStr}${this.header(key, arr.length, fields, false)}`];
+    lines.push(...this.tabularRows(arr, fields, depth + 1));
+    return lines;
+  }
 
-    // Encode array header with fields per §6
-    const delimiterSym = delimiter === ',' ? '' : delimiter === '\t' ? '\t' : '|';
-    const keyPart = key ? (utils.keyNeedsQuoting(key) ? `"${utils.escapeString(key)}"` : key) : '';
+  /**
+   * Render tabular rows at a given depth (§9.3)
+   */
+  private tabularRows(
+    arr: Record<string, unknown>[],
+    fields: FieldEntry[],
+    depth: number,
+  ): string[] {
+    const rowIndent = utils.indent(depth, this.options.indent);
 
-    // Encode field names
-    const encodedFields = fields.map((field) =>
-      utils.keyNeedsQuoting(field) ? `"${utils.escapeString(field)}"` : field,
-    );
-    const fieldsStr = encodedFields.join(delimiter === ',' ? ', ' : delimiter);
+    return arr.map((obj) => {
+      const cells = utils
+        .collectLeafValues(obj, fields)
+        .map((cell) => this.encodePrimitive(cell, this.documentDelimiter));
 
-    const header = `${indentStr}${keyPart}[${arr.length}${delimiterSym}]{${fieldsStr}}:`;
-    lines.push(header);
+      return `${rowIndent}${cells.join(this.documentDelimiter)}`;
+    });
+  }
 
-    // Encode each row
-    const valueIndentStr = utils.indent(depth + 1, this.options.indent);
-    for (const obj of arr) {
-      const values = fields.map((field) => this.encodePrimitiveValue(obj[field], delimiter));
-      const rowStr = values.join(delimiter === ',' ? ', ' : delimiter);
-      lines.push(`${valueIndentStr}${rowStr}`);
+  /**
+   * Encode an array in list form per §9.2 and §9.4
+   */
+  private encodeListArray(arr: unknown[], key: string | null, depth: number): string[] {
+    const indentStr = utils.indent(depth, this.options.indent);
+    const lines = [`${indentStr}${this.header(key, arr.length, null, false)}`];
+
+    for (const item of arr) {
+      lines.push(...this.encodeListItem(item, depth + 1));
     }
 
     return lines;
   }
 
   /**
-   * Encode a mixed array (contains objects or nested arrays)
+   * Encode one list item at the given depth (§9.2, §9.4, §10)
    */
-  private encodeMixedArray(arr: unknown[], key: string | null, depth: number): string[] {
-    const lines: string[] = [];
+  private encodeListItem(item: unknown, depth: number): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
-    const delimiter = this.options.delimiter;
+    const marker = `${indentStr}- `;
 
-    // Encode array header
-    const delimiterSym = delimiter === ',' ? '' : delimiter === '\t' ? '\t' : '|';
-    const keyPart = key ? (utils.keyNeedsQuoting(key) ? `"${utils.escapeString(key)}"` : key) : '';
-    const header = `${indentStr}${keyPart}[${arr.length}${delimiterSym}]:`;
-    lines.push(header);
+    if (Array.isArray(item)) {
+      // Inner arrays are keyless headers on the hyphen line (§9.2, §9.4)
+      if (item.every((element) => utils.isPrimitive(element))) {
+        const values = item.map((element) => this.encodePrimitive(element, this.documentDelimiter));
+        const header = this.header(null, item.length, null, false);
+        // Empty inner arrays carry no inline content (§9.2)
+        return [
+          item.length === 0 ? `${marker}${header}` : `${marker}${header} ${values.join(this.documentDelimiter)}`,
+        ];
+      }
 
-    // Encode each element
-    for (const item of arr) {
-      if (item === null || typeof item === 'boolean' || typeof item === 'number' || typeof item === 'string') {
-        const valueIndentStr = utils.indent(depth + 1, this.options.indent);
-        const encoded = this.encodePrimitiveValue(item, delimiter);
-        lines.push(`${valueIndentStr}${encoded}`);
-      } else if (Array.isArray(item)) {
-        // Nested array
-        const nestedLines = this.encodeArray(item, null, depth + 1);
-        lines.push(...nestedLines);
-      } else if (utils.isPlainObject(item)) {
-        // Object element
-        const objLines = this.encodeObject(item as Record<string, unknown>, depth + 1);
-        lines.push(...objLines);
-      } else {
-        const valueIndentStr = utils.indent(depth + 1, this.options.indent);
-        lines.push(`${valueIndentStr}null`);
+      // Nested arrays of objects use list form; tabular form is unavailable
+      // here because a keyless fields-bearing header is root-only (§6, §9.4)
+      const lines = [`${marker}${this.header(null, item.length, null, false)}`];
+      for (const element of item) {
+        lines.push(...this.encodeListItem(element, depth + 1));
+      }
+      return lines;
+    }
+
+    if (utils.isPlainObject(item)) {
+      return this.encodeListItemObject(item as Record<string, unknown>, depth);
+    }
+
+    return [`${marker}${this.encodePrimitive(item, this.documentDelimiter)}`];
+  }
+
+  /**
+   * Encode an object appearing as a list item per §10
+   */
+  private encodeListItemObject(obj: Record<string, unknown>, depth: number): string[] {
+    const indentStr = utils.indent(depth, this.options.indent);
+    const entries = Object.entries(obj);
+
+    // Empty object list item: a bare "-" at the list-item depth (§10)
+    if (entries.length === 0) {
+      return [`${indentStr}-`];
+    }
+
+    const [firstKey, firstValue] = entries[0];
+    const restEntries = entries.slice(1);
+    const lines: string[] = [];
+
+    // When the first field is a tabular array or keyed tabular object, its
+    // header goes on the hyphen line and its rows sit at depth + 2 (§10)
+    const firstFieldLines = this.encodeListItemFirstField(firstKey, firstValue, depth);
+    lines.push(...firstFieldLines);
+
+    // All other fields appear at depth + 1 under the hyphen line (§10)
+    for (const [key, value] of restEntries) {
+      lines.push(...this.encodeField(key, value, depth + 1));
+    }
+
+    return lines;
+  }
+
+  /**
+   * Encode the first field of a list-item object, carried on the hyphen line (§10)
+   */
+  private encodeListItemFirstField(key: string, value: unknown, depth: number): string[] {
+    const marker = `${utils.indent(depth, this.options.indent)}- `;
+
+    if (Array.isArray(value) && value.length > 0) {
+      const fields = utils.getTabularFields(value);
+      if (fields !== null) {
+        // Header on the hyphen line, rows at depth + 2 (§10)
+        const header = this.header(key, value.length, fields, false);
+        return [
+          `${marker}${header}`,
+          ...this.tabularRows(value as Record<string, unknown>[], fields, depth + 2),
+        ];
       }
     }
 
-    return lines;
+    if (utils.isPlainObject(value)) {
+      const nested = value as Record<string, unknown>;
+      const keyedFields = utils.getKeyedTabularFields(nested);
+      if (keyedFields !== null) {
+        // Keyed header on the hyphen line, entry rows at depth + 2 (§10)
+        const header = this.header(key, Object.keys(nested).length, keyedFields, true);
+        return [
+          `${marker}${header}`,
+          ...this.entryRows(Object.entries(nested), keyedFields, depth + 2),
+        ];
+      }
+    }
+
+    // All other first fields: encode normally, then splice the hyphen marker
+    // in place of the leading indentation of the field's first line (§10).
+    const fieldLines = this.encodeField(key, value, depth + 1);
+    const indentWidth = (depth + 1) * this.options.indent;
+    fieldLines[0] = `${marker}${fieldLines[0].slice(indentWidth)}`;
+    return fieldLines;
   }
 
   /**
-   * Apply key folding per §13.4 (optional feature)
+   * Apply key folding (optional feature)
    * Collapses single-key object chains into dotted paths
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {

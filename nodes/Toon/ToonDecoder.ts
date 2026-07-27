@@ -1,14 +1,20 @@
 /**
  * TOON Decoder - Parses TOON format to JSON
- * Implements TOON Specification v3.3
+ * Implements TOON Specification v4.1
  */
 
-import type { DecoderOptions, Delimiter, HeaderInfo, ParsedLine } from './types';
+import type { DecoderOptions, FieldEntry, ParsedLine } from './types';
 import { ToonDecodingError } from './types';
 import * as utils from './ToonUtils';
 
 export class ToonDecoder {
   private options: DecoderOptions;
+
+  /** Comment-stripped, non-blank lines of the document (§5.1) */
+  private lines: ParsedLine[] = [];
+
+  /** Cursor into `lines` */
+  private pos = 0;
 
   constructor(options: DecoderOptions) {
     this.options = options;
@@ -18,31 +24,15 @@ export class ToonDecoder {
    * Decode TOON text to JavaScript value
    */
   decode(toonText: string): unknown {
-    // Parse into lines with metadata
-    const lines = this.parseLines(toonText);
+    this.lines = this.parseLines(toonText);
+    this.pos = 0;
 
-    // Filter out empty lines
-    const nonEmptyLines = lines.filter((line) => !line.isEmpty);
-
-    if (nonEmptyLines.length === 0) {
-      return null;
+    // An empty document (or one of only comments/blanks) decodes to {} (§5)
+    if (this.lines.length === 0) {
+      return {};
     }
 
-    // Determine root form per §5
-    const rootForm = this.determineRootForm(nonEmptyLines);
-
-    let result: unknown;
-
-    if (rootForm === 'array') {
-      result = this.parseArray(nonEmptyLines, 0);
-    } else if (rootForm === 'primitive') {
-      // Single primitive value
-      const token = nonEmptyLines[0].content.trim();
-      result = this.parseTokenValue(token);
-    } else {
-      // Object
-      result = this.parseObject(nonEmptyLines, 0, 0);
-    }
+    let result = this.parseRoot();
 
     // Apply path expansion if enabled
     if (this.options.expandPaths === 'safe' && utils.isPlainObject(result)) {
@@ -53,43 +43,62 @@ export class ToonDecoder {
   }
 
   /**
-   * Parse text into lines with metadata
+   * Split input into lines, strip comments and blanks, and validate
+   * indentation per §5.1 and §12
    */
   private parseLines(text: string): ParsedLine[] {
-    const rawLines = text.split('\n');
+    // A single leading U+FEFF is a byte-order mark, not content (§12)
+    const withoutBom = text.startsWith('﻿') ? text.slice(1) : text;
+    const rawLines = withoutBom.split('\n');
     const parsed: ParsedLine[] = [];
 
     for (let i = 0; i < rawLines.length; i++) {
-      const line = rawLines[i];
+      // A trailing CR is part of the line terminator, accepting CRLF (§12)
+      let line = rawLines[i].replace(/\r$/, '');
 
-      // Check for tabs in indentation (strict mode error per §14)
-      if (this.options.strict && /^\t/.test(line)) {
-        throw new ToonDecodingError('Tabs not allowed in indentation', {
-          lineNumber: i + 1,
-          line,
-        });
+      // Trailing spaces are not part of the line's content (§12)
+      line = line.replace(/ +$/, '');
+
+      const lineNumber = i + 1;
+
+      // Comment lines are removed in a lexical pre-pass, in both modes (§5.1).
+      // Only spaces may precede the "#"; a leading tab disqualifies the line.
+      if (/^ *#/.test(line)) {
+        continue;
       }
 
-      // Count leading spaces
-      const match = line.match(/^( *)/);
-      const indent = match ? match[1].length : 0;
+      // Blank lines never create or close structure (§12)
+      if (line.trim() === '') {
+        continue;
+      }
 
-      // Validate indentation is multiple of indent size in strict mode
-      if (this.options.strict && indent > 0 && indent % this.options.indent !== 0) {
+      // Tabs MUST NOT be used for indentation (§12)
+      if (/^\t/.test(line)) {
+        if (this.options.strict) {
+          throw new ToonDecodingError('Tabs not allowed in indentation', {
+            lineNumber,
+            line,
+          });
+        }
+        // Non-strict: leading tabs are removed before classification (§12)
+        line = line.replace(/^\t+/, '');
+      }
+
+      const indent = line.match(/^( *)/)?.[1].length ?? 0;
+
+      // Indentation MUST be an exact multiple of indentSize in strict mode (§12)
+      if (this.options.strict && indent % this.options.indent !== 0) {
         throw new ToonDecodingError(
           `Indentation must be multiple of ${this.options.indent}, got ${indent} spaces`,
-          {
-            lineNumber: i + 1,
-            line,
-          },
+          { lineNumber, line },
         );
       }
 
       parsed.push({
-        content: line,
+        content: line.slice(indent),
         indent,
-        lineNumber: i + 1,
-        isEmpty: line.trim() === '',
+        lineNumber,
+        isEmpty: false,
       });
     }
 
@@ -97,637 +106,705 @@ export class ToonDecoder {
   }
 
   /**
-   * Determine root form per §5
+   * Depth of a line in indentation levels (§1.3)
    */
-  private determineRootForm(lines: ParsedLine[]): 'array' | 'primitive' | 'object' {
-    const firstLine = lines[0].content.trim();
+  private depthOf(line: ParsedLine): number {
+    return Math.floor(line.indent / this.options.indent);
+  }
 
-    // Check for array header pattern per §6 (length must have no leading zeros)
-    if (/^\[(?:0|[1-9]\d*)[\t|]?\]/.test(firstLine) && this.isValidArrayHeader(firstLine)) {
-      return 'array';
-    }
-
-    // Per §4/§5: bare "[]" at root decodes as empty root array
-    if (firstLine === '[]') {
-      return 'array';
-    }
-
-    // Per §14: non-whitespace between bracket segment and {/: is a decoding error in strict mode
-    if (this.options.strict && this.isInvalidArrayHeader(firstLine)) {
-      throw new ToonDecodingError(
-        'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
-        { lineNumber: lines[0].lineNumber, line: firstLine },
-      );
-    }
-
-    // Check if single line and no colon (primitive)
-    if (lines.length === 1 && !firstLine.includes(':')) {
-      return 'primitive';
-    }
-
-    // Default to object
-    return 'object';
+  private peek(): ParsedLine | null {
+    return this.pos < this.lines.length ? this.lines[this.pos] : null;
   }
 
   /**
-   * Parse array header per §6
-   * Per §6: bracket length MUST be a non-negative integer with no leading zeros.
-   * [03], [-1], [bar] are invalid and MUST error in strict mode.
+   * Determine and parse the root form per §5
    */
-  private parseArrayHeader(line: ParsedLine): HeaderInfo {
-    const content = line.content.trim();
+  private parseRoot(): unknown {
+    const first = this.lines[0];
+    const content = first.content;
 
-    // Handle bare "[]" as empty root array per §4/§5
+    // The bare token "[]" is an empty root array (§9.1)
     if (content === '[]') {
-      return { key: null, length: 0, delimiter: ',', fields: null, rawLine: content, lineNumber: line.lineNumber };
-    }
-
-    // Match pattern: optional_key [length delimiter_symbol] optional_{fields} : optional_values
-    // Length must be 0 or a positive integer with no leading zeros per §6
-    const match = content.match(/^(.*?)\[(0|[1-9]\d*)([\t|])?\]\s*(?:\{([^}]+)\}\s*)?:(.*)$/);
-
-    if (!match) {
-      // Check if it looks like a bracket with leading zeros — explicit error per §6
-      if (this.options.strict && /\[0\d+[\t|]?\]/.test(content)) {
-        throw new ToonDecodingError(
-          `Invalid array length: leading zeros are not allowed in bracket segment`,
-          { lineNumber: line.lineNumber, line: content },
-        );
-      }
-      throw new ToonDecodingError('Invalid array header format', {
-        lineNumber: line.lineNumber,
-        line: content,
-      });
-    }
-
-    const [, keyPart, lengthStr, delimSym, fieldsPart] = match;
-
-    // Parse key
-    let key: string | null = keyPart.trim();
-    if (key) {
-      if (key.startsWith('"') && key.endsWith('"')) {
-        key = utils.unescapeString(key.slice(1, -1));
-      }
-    } else {
-      key = null;
-    }
-
-    // Parse length
-    const length = parseInt(lengthStr, 10);
-    if (isNaN(length) || length < 0) {
-      throw new ToonDecodingError(`Invalid array length: ${lengthStr}`, {
-        lineNumber: line.lineNumber,
-      });
-    }
-
-    // Determine delimiter per §11
-    let delimiter: Delimiter = ',';
-    if (delimSym === '\t') {
-      delimiter = '\t';
-    } else if (delimSym === '|') {
-      delimiter = '|';
-    }
-
-    // Parse fields if present
-    let fields: string[] | null = null;
-    if (fieldsPart) {
-      fields = this.parseDelimitedTokens(fieldsPart, delimiter).map((token) => {
-        // Unquote if quoted
-        if (token.startsWith('"') && token.endsWith('"')) {
-          return utils.unescapeString(token.slice(1, -1));
-        }
-        return token;
-      });
-    }
-
-    return {
-      key,
-      length,
-      delimiter,
-      fields,
-      rawLine: content,
-      lineNumber: line.lineNumber,
-    };
-  }
-
-  /**
-   * Parse delimited tokens (respects quotes)
-   */
-  private parseDelimitedTokens(text: string, delimiter: Delimiter): string[] {
-    const tokens: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    let escaped = false;
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-
-      if (escaped) {
-        current += char;
-        escaped = false;
-        continue;
-      }
-
-      if (char === '\\') {
-        current += char;
-        escaped = true;
-        continue;
-      }
-
-      if (char === '"' && !escaped) {
-        inQuotes = !inQuotes;
-        current += char;
-        continue;
-      }
-
-      // Check for delimiter
-      if (!inQuotes) {
-        if (delimiter === ',' && text.slice(i, i + 2) === ', ') {
-          tokens.push(current.trim());
-          current = '';
-          i++; // Skip the space after comma
-          continue;
-        } else if (char === delimiter) {
-          tokens.push(current.trim());
-          current = '';
-          continue;
-        }
-      }
-
-      current += char;
-    }
-
-    // Add final token
-    if (current.trim()) {
-      tokens.push(current.trim());
-    }
-
-    return tokens;
-  }
-
-  /**
-   * Parse an array
-   */
-  private parseArray(lines: ParsedLine[], startIndex: number): unknown[] {
-    const headerLine = lines[startIndex];
-    const header = this.parseArrayHeader(headerLine);
-
-    // Per §4/§5: bare "[]" is an empty array literal
-    if (header.rawLine === '[]') {
+      this.pos = 1;
+      this.checkNoTrailingContent();
       return [];
     }
 
-    // Check if values are inline (same line as header)
-    const inlineMatch = header.rawLine.match(/:\s*(.+)$/);
-    if (inlineMatch && inlineMatch[1].trim()) {
-      // Inline array
-      const valuesStr = inlineMatch[1].trim();
-      const tokens = this.parseDelimitedTokens(valuesStr, header.delimiter);
-      const values = tokens.map((token) => this.parseTokenValue(token));
+    const header = this.tryParseHeader(first);
 
-      // Validate count in strict mode
-      if (this.options.strict && values.length !== header.length) {
-        throw new ToonDecodingError(
-          `Array length mismatch: expected ${header.length}, got ${values.length}`,
-          {
-            lineNumber: header.lineNumber,
-          },
-        );
+    // Only a *keyless* header at depth 0 defines the root form; a keyed
+    // header such as `users[2:]{…}:` is an ordinary field of a root object (§5)
+    if (header !== null && header.key === null && this.depthOf(first) === 0) {
+      // A keyless keyed header at the root is a keyed tabular object (§9.5)
+      if (header.keyed) {
+        const value = this.parseKeyedTabular(header, 0);
+        this.checkNoTrailingContent();
+        return value;
       }
 
-      return values;
+      const value = this.parseArrayBody(header, 0);
+      this.checkNoTrailingContent();
+      return value;
     }
 
-    // Expanded array: parse subsequent lines
-    const baseIndent = headerLine.indent;
-    const valueIndent = baseIndent + this.options.indent;
-
-    // Check if tabular (has fields)
-    if (header.fields) {
-      return this.parseTabularArray(lines, startIndex, header);
+    // A single non-blank line that is neither a header nor a key-value line
+    // decodes as a root primitive (§5)
+    if (this.lines.length === 1 && utils.findUnquoted(content, ':') < 0) {
+      this.pos = 1;
+      return this.parseValueToken(content, first);
     }
 
-    // Parse array elements
-    const values: unknown[] = [];
-    let currentIndex = startIndex + 1;
-    let currentObj: Record<string, unknown> | null = null;
-    const seenKeys = new Set<string>();
-
-    while (currentIndex < lines.length) {
-      const line = lines[currentIndex];
-
-      // Skip empty lines
-      if (line.isEmpty) {
-        if (this.options.strict) {
-          throw new ToonDecodingError('Blank lines not allowed in arrays in strict mode', {
-            lineNumber: line.lineNumber,
-          });
-        }
-        currentIndex++;
-        continue;
-      }
-
-      // Check if we've exited the array
-      if (line.indent <= baseIndent) {
-        // Save any pending object
-        if (currentObj !== null) {
-          values.push(currentObj);
-          currentObj = null;
-        }
-        break;
-      }
-
-      // Check proper indentation
-      if (line.indent < valueIndent) {
-        throw new ToonDecodingError(
-          `Invalid indentation: expected ${valueIndent}, got ${line.indent}`,
-          {
-            lineNumber: line.lineNumber,
-          },
-        );
-      }
-
-      // Parse element
-      const content = line.content.trim();
-
-      // Per §14: strict mode error for non-whitespace between bracket segment and {/:
-      if (this.options.strict && this.isInvalidArrayHeader(content)) {
-        throw new ToonDecodingError(
-          'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
-          { lineNumber: line.lineNumber, line: content },
-        );
-      }
-
-      // Check if it's a nested array (must be a valid array header per §9.3)
-      if (/^\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
-        // Save any pending object first
-        if (currentObj !== null) {
-          values.push(currentObj);
-          currentObj = null;
-          seenKeys.clear();
-        }
-        const nestedArray = this.parseArray(lines, currentIndex);
-        values.push(nestedArray);
-        // Check if it was inline (only one line) or expanded
-        const arrayHeader = this.parseArrayHeader(lines[currentIndex]);
-        const inlineMatch = arrayHeader.rawLine.match(/:\s*(.+)$/);
-        if (inlineMatch && inlineMatch[1].trim()) {
-          // Inline array, just move to next line
-          currentIndex++;
-        } else {
-          // Expanded array, skip to next sibling
-          currentIndex = this.findNextSiblingIndex(lines, currentIndex, valueIndent);
-        }
-      }
-      // Check if it's an object
-      else if (content.includes(':')) {
-        // Could be object or key-value
-        const colonIndex = this.findUnquotedColon(content);
-        if (colonIndex > 0) {
-          const valuePart = content.slice(colonIndex + 1).trim();
-          const keyPart = content.slice(0, colonIndex).trim();
-
-          // Parse key
-          let key: string;
-          if (keyPart.startsWith('"') && keyPart.endsWith('"')) {
-            key = utils.unescapeString(keyPart.slice(1, -1));
-          } else {
-            key = keyPart;
-          }
-
-          if (!valuePart) {
-            // Multi-line object (value on next lines)
-            // Save any pending object first
-            if (currentObj !== null) {
-              values.push(currentObj);
-              currentObj = null;
-              seenKeys.clear();
-            }
-            const obj = this.parseObject(lines, currentIndex, valueIndent);
-            values.push(obj);
-            currentIndex = this.findNextSiblingIndex(lines, currentIndex, valueIndent);
-          } else {
-            // Single-line key-value - accumulate into object
-            // If we see a duplicate key, start a new object
-            if (seenKeys.has(key)) {
-              if (currentObj !== null) {
-                values.push(currentObj);
-              }
-              currentObj = {};
-              seenKeys.clear();
-            }
-
-            if (currentObj === null) {
-              currentObj = {};
-            }
-
-            currentObj[key] = this.parseTokenValue(valuePart);
-            seenKeys.add(key);
-            currentIndex++;
-          }
-        } else {
-          // Primitive value
-          // Save any pending object first
-          if (currentObj !== null) {
-            values.push(currentObj);
-            currentObj = null;
-            seenKeys.clear();
-          }
-          values.push(this.parseTokenValue(content));
-          currentIndex++;
-        }
-      } else {
-        // Primitive value
-        // Save any pending object first
-        if (currentObj !== null) {
-          values.push(currentObj);
-          currentObj = null;
-          seenKeys.clear();
-        }
-        values.push(this.parseTokenValue(content));
-        currentIndex++;
-      }
-    }
-
-    // Save any final pending object
-    if (currentObj !== null) {
-      values.push(currentObj);
-    }
-
-    // Validate count in strict mode
-    if (this.options.strict && values.length !== header.length) {
+    // Two or more depth-0 lines that are neither headers nor key-value lines
+    // make the document invalid (§5, any mode)
+    const scalarLines = this.lines.filter(
+      (line) =>
+        this.depthOf(line) === 0 &&
+        utils.findUnquoted(line.content, ':') < 0 &&
+        !line.content.startsWith('- '),
+    );
+    if (scalarLines.length >= 2) {
       throw new ToonDecodingError(
-        `Array length mismatch: expected ${header.length}, got ${values.length}`,
-        {
-          lineNumber: header.lineNumber,
-        },
+        'Multiple depth-0 lines that are neither headers nor key-value lines',
+        { lineNumber: scalarLines[1].lineNumber, line: scalarLines[1].content },
       );
     }
 
-    return values;
+    return this.parseObject(0);
   }
 
   /**
-   * Parse a tabular array (with fields)
+   * Enforce that no content follows a completed root form (§5, §14.2)
    */
-  private parseTabularArray(
-    lines: ParsedLine[],
-    startIndex: number,
-    header: HeaderInfo,
-  ): Record<string, unknown>[] {
-    const rows: Record<string, unknown>[] = [];
-    let currentIndex = startIndex + 1;
-    const baseIndent = lines[startIndex].indent;
+  private checkNoTrailingContent(): void {
+    const next = this.peek();
+    if (next === null) {
+      return;
+    }
+    if (this.options.strict) {
+      throw new ToonDecodingError('Trailing content after completed root form', {
+        lineNumber: next.lineNumber,
+        line: next.content,
+      });
+    }
+    // Non-strict decoders MAY ignore it (§5)
+    this.pos = this.lines.length;
+  }
 
-    while (currentIndex < lines.length && rows.length < header.length) {
-      const line = lines[currentIndex];
+  /**
+   * Attempt to parse a line as a header per §6.
+   *
+   * Returns null when the line is not header-shaped. Header syntax errors
+   * propagate in strict mode and fall through to key-value parsing otherwise.
+   */
+  private tryParseHeader(line: ParsedLine): utils.ParsedHeader | null {
+    const outcome = utils.tryParseHeader(line.content);
 
-      // Skip empty lines
-      if (line.isEmpty) {
-        if (this.options.strict) {
-          throw new ToonDecodingError('Blank lines not allowed in arrays in strict mode', {
-            lineNumber: line.lineNumber,
-          });
-        }
-        currentIndex++;
-        continue;
-      }
-
-      // Check if we've exited the array
-      if (line.indent <= baseIndent) {
-        break;
-      }
-
-      // Parse row
-      const content = line.content.trim();
-      const tokens = this.parseDelimitedTokens(content, header.delimiter);
-
-      // Validate field count in strict mode
-      if (this.options.strict && tokens.length !== header.fields!.length) {
-        throw new ToonDecodingError(
-          `Row field count mismatch: expected ${header.fields!.length}, got ${tokens.length}`,
-          {
-            lineNumber: line.lineNumber,
-          },
-        );
-      }
-
-      // Create object from fields and values
-      const row: Record<string, unknown> = {};
-      for (let i = 0; i < header.fields!.length; i++) {
-        const field = header.fields![i];
-        const value = i < tokens.length ? this.parseTokenValue(tokens[i]) : null;
-        row[field] = value;
-      }
-
-      rows.push(row);
-      currentIndex++;
+    if (outcome.error !== null && this.options.strict) {
+      throw new ToonDecodingError(outcome.error, {
+        lineNumber: line.lineNumber,
+        line: line.content,
+      });
     }
 
-    return rows;
+    return outcome.header;
   }
 
   /**
-   * Parse an object
+   * Parse an object scope whose content sits at `depth` (§8)
    */
-  private parseObject(
-    lines: ParsedLine[],
-    startIndex: number,
-    expectedIndent: number,
-  ): Record<string, unknown> {
+  private parseObject(depth: number): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
-    let currentIndex = startIndex;
 
-    while (currentIndex < lines.length) {
-      const line = lines[currentIndex];
+    while (this.pos < this.lines.length) {
+      const line = this.lines[this.pos];
+      const lineDepth = this.depthOf(line);
 
-      // Skip empty lines
-      if (line.isEmpty) {
-        currentIndex++;
-        continue;
-      }
-
-      // Check if we've exited this object
-      if (currentIndex > startIndex && line.indent < expectedIndent) {
+      // A shallower line ends this scope
+      if (lineDepth < depth) {
         break;
       }
 
-      // Parse key-value pair
-      const content = line.content.trim();
-
-      // Per §14: strict mode error for non-whitespace between bracket segment and {/:
-      if (this.options.strict && this.isInvalidArrayHeader(content)) {
-        throw new ToonDecodingError(
-          'Non-whitespace content between bracket segment and colon/fields: line MUST NOT be parsed as array header',
-          { lineNumber: line.lineNumber, line: content },
-        );
-      }
-
-      // Check for array (must be a valid array header per §9.3 — non-whitespace between ] and {/: → fall-through to key-value)
-      if (/\[\d+[\t|]?\]/.test(content) && this.isValidArrayHeader(content)) {
-        const headerMatch = content.match(/^(.*?)\[/);
-        if (headerMatch && headerMatch[1].trim()) {
-          // Named array
-          const header = this.parseArrayHeader(line);
-          const array = this.parseArray(lines, currentIndex);
-          if (header.key) {
-            obj[header.key] = array;
-          }
-          currentIndex = this.findNextSiblingIndex(lines, currentIndex, expectedIndent);
-        } else {
-          // Anonymous array (shouldn't happen in object context)
-          currentIndex++;
+      // A deeper line whose predecessor did not open a scope belongs to no
+      // scope (§8, §14.2)
+      if (lineDepth > depth) {
+        if (this.options.strict) {
+          throw new ToonDecodingError(
+            'Over-indented line: no enclosing scope was opened',
+            { lineNumber: line.lineNumber, line: line.content },
+          );
         }
+        this.pos++;
         continue;
       }
 
-      // Parse key-value
-      const colonIndex = this.findUnquotedColon(content);
-      if (colonIndex < 0) {
-        // No colon, skip or error
-        currentIndex++;
-        continue;
-      }
-
-      const keyPart = content.slice(0, colonIndex).trim();
-      const valuePart = content.slice(colonIndex + 1).trim();
-
-      // Parse key
-      let key: string;
-      if (keyPart.startsWith('"') && keyPart.endsWith('"')) {
-        key = utils.unescapeString(keyPart.slice(1, -1));
-      } else {
-        key = keyPart;
-      }
-
-      // Parse value
-      if (!valuePart) {
-        // Nested object or array on next lines
-        const nextLine = currentIndex + 1 < lines.length ? lines[currentIndex + 1] : null;
-        if (nextLine && !nextLine.isEmpty && nextLine.indent > line.indent) {
-          // Check if next line is array (must be a valid array header per §9.3)
-          if (/\[\d+[\t|]?\]/.test(nextLine.content.trim()) && this.isValidArrayHeader(nextLine.content.trim())) {
-            const array = this.parseArray(lines, currentIndex + 1);
-            obj[key] = array;
-            currentIndex = this.findNextSiblingIndex(lines, currentIndex + 1, line.indent);
-          } else {
-            // Nested object
-            const nestedObj = this.parseObject(lines, currentIndex + 1, line.indent + this.options.indent);
-            obj[key] = nestedObj;
-            currentIndex = this.findNextSiblingIndex(lines, currentIndex + 1, line.indent);
-          }
-        } else {
-          // Empty value = null
-          obj[key] = null;
-          currentIndex++;
-        }
-      } else {
-        // Per §4/§5: "[]" in object field position decodes as empty array
-        if (valuePart === '[]') {
-          obj[key] = [];
-        } else {
-          obj[key] = this.parseTokenValue(valuePart);
-        }
-        currentIndex++;
-      }
+      const { key, value } = this.parseFieldLine(line, depth);
+      this.assignKey(obj, key, line);
+      utils.setDecodedKey(obj, key, value);
     }
 
     return obj;
   }
 
   /**
-   * Check if a line content is a valid array header per §6
-   * Length must have no leading zeros; only whitespace between ] and { or :
+   * Enforce the duplicate sibling key rule (§14.3)
    */
-  private isValidArrayHeader(content: string): boolean {
-    if (content === '[]') return true;
-    return /^(.*?)\[(0|[1-9]\d*)([\t|])?\]\s*(?:\{[^}]+\}\s*)?:/.test(content);
+  private assignKey(
+    obj: Record<string, unknown>,
+    key: string,
+    line: ParsedLine,
+  ): void {
+    if (Object.prototype.hasOwnProperty.call(obj, key) && this.options.strict) {
+      throw new ToonDecodingError(`Duplicate key '${key}' at the same depth`, {
+        lineNumber: line.lineNumber,
+        line: line.content,
+      });
+    }
+    // Non-strict: last-write-wins, applied silently by the caller's assignment
   }
 
   /**
-   * Check if a line looks like an array header but is invalid (leading zeros or non-whitespace between ] and {/:)
-   * Per §14: such lines are a decoding error in strict mode
+   * Parse one key-bearing line of an object scope and its nested content (§8)
    */
-  private isInvalidArrayHeader(content: string): boolean {
-    // Has bracket segment but is not a valid header
-    return /\[\d+[\t|]?\]/.test(content) && !this.isValidArrayHeader(content);
+  private parseFieldLine(
+    line: ParsedLine,
+    depth: number,
+  ): { key: string; value: unknown } {
+    const header = this.tryParseHeader(line);
+
+    if (header !== null) {
+      // A keyless header is valid only at the root or as a list item (§6)
+      if (header.key === null) {
+        if (this.options.strict) {
+          throw new ToonDecodingError(
+            'Keyless header is not valid in object-field position',
+            { lineNumber: line.lineNumber, line: line.content },
+          );
+        }
+      } else {
+        this.pos++;
+        const value = header.keyed
+          ? this.parseKeyedTabularBody(header, depth + 1)
+          : this.parseArrayBodyAfterHeader(header, depth);
+        return { key: header.key, value };
+      }
+    }
+
+    // Key-value line (§5.2)
+    const colonIndex = utils.findUnquoted(line.content, ':');
+    if (colonIndex < 0) {
+      throw new ToonDecodingError('Missing colon in key context', {
+        lineNumber: line.lineNumber,
+        line: line.content,
+      });
+    }
+
+    const key = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
+    const rest = utils.trimSpaces(line.content.slice(colonIndex + 1));
+    this.pos++;
+
+    // "key: []" is the explicit empty-array form (§9.1)
+    if (rest === '[]') {
+      return { key, value: [] };
+    }
+
+    if (rest !== '') {
+      return { key, value: this.parseValueToken(rest, line) };
+    }
+
+    // A bare "key:" opens a nested or empty object (§8)
+    return { key, value: this.parseNestedScope(depth) };
   }
 
   /**
-   * Find index of unquoted colon
+   * Parse the scope opened by a bare "key:" line (§8)
    */
-  private findUnquotedColon(text: string): number {
-    let inQuotes = false;
-    let escaped = false;
+  private parseNestedScope(depth: number): Record<string, unknown> {
+    const next = this.peek();
 
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
+    if (next === null || this.depthOf(next) <= depth) {
+      // No nested content: an empty object
+      return {};
+    }
 
-      if (escaped) {
-        escaped = false;
+    // The first line of a non-empty nested scope MUST be at exactly depth+1 (§8)
+    if (this.options.strict && this.depthOf(next) > depth + 1) {
+      throw new ToonDecodingError(
+        'Indentation depth jump: nested scope must start one level deeper',
+        { lineNumber: next.lineNumber, line: next.content },
+      );
+    }
+
+    return this.parseObject(depth + 1);
+  }
+
+  /**
+   * Parse an array whose header has already been consumed, with the header
+   * line standing at `headerDepth` (§9.1–§9.4)
+   */
+  private parseArrayBodyAfterHeader(
+    header: utils.ParsedHeader,
+    headerDepth: number,
+  ): unknown[] {
+    return this.parseArrayContent(header, headerDepth + 1);
+  }
+
+  /**
+   * Parse a root array: consumes the header line, then its content (§9)
+   */
+  private parseArrayBody(header: utils.ParsedHeader, headerDepth: number): unknown[] {
+    this.pos++;
+    return this.parseArrayContent(header, headerDepth + 1);
+  }
+
+  /**
+   * Parse an array's content at `contentDepth` (§9.1–§9.4)
+   */
+  private parseArrayContent(
+    header: utils.ParsedHeader,
+    contentDepth: number,
+  ): unknown[] {
+    // A fields-bearing header carries no inline content (§6, §14.2)
+    if (header.fields !== null && header.inline !== '') {
+      throw new ToonDecodingError('Content after a fields-bearing header colon', {
+        lineNumber: this.lines[this.pos - 1]?.lineNumber,
+        line: header.inline,
+      });
+    }
+
+    // Tabular form (§9.3)
+    if (header.fields !== null) {
+      return this.parseTabularRows(header, contentDepth);
+    }
+
+    // Inline primitive array (§9.1)
+    if (header.inline !== '') {
+      const values = utils
+        .splitDelimited(header.inline, header.delimiter)
+        .map((token) => this.parseValueToken(token, this.lines[this.pos - 1]));
+
+      this.checkCount(values.length, header.length, 'inline array values');
+      return values;
+    }
+
+    // Legacy empty-array header form "key[0]:" (§9.1)
+    if (header.length === 0) {
+      const next = this.peek();
+      if (next === null || this.depthOf(next) < contentDepth) {
+        return [];
+      }
+    }
+
+    // List form (§9.2, §9.4)
+    return this.parseListItems(header, contentDepth);
+  }
+
+  /**
+   * Parse tabular rows at `rowDepth` (§9.3)
+   */
+  private parseTabularRows(
+    header: utils.ParsedHeader,
+    rowDepth: number,
+  ): Record<string, unknown>[] {
+    const fields = header.fields!;
+    const leafCount = utils.countLeafFields(fields);
+    const rows: Record<string, unknown>[] = [];
+
+    while (this.pos < this.lines.length) {
+      const line = this.lines[this.pos];
+
+      if (this.depthOf(line) !== rowDepth) {
+        break;
+      }
+
+      // Row/key-value disambiguation at row depth (§9.3)
+      const colonIndex = utils.findUnquoted(line.content, ':');
+      const delimIndex = utils.findUnquoted(line.content, header.delimiter);
+
+      if (colonIndex >= 0 && (delimIndex < 0 || colonIndex < delimIndex)) {
+        // Colon before delimiter (or no delimiter): end of rows
+        break;
+      }
+
+      const cells = utils.splitDelimited(line.content, header.delimiter);
+      this.checkWidth(cells.length, leafCount, line);
+      rows.push(this.materializeRow(cells, fields, line));
+      this.pos++;
+    }
+
+    this.checkCount(rows.length, header.length, 'tabular rows');
+    return rows;
+  }
+
+  /**
+   * Build an object from a row's cells by walking the field tree (§9.3)
+   */
+  private materializeRow(
+    cells: string[],
+    fields: FieldEntry[],
+    line: ParsedLine,
+  ): Record<string, unknown> {
+    let index = 0;
+
+    const walk = (entries: FieldEntry[]): Record<string, unknown> => {
+      const obj: Record<string, unknown> = {};
+
+      for (const entry of entries) {
+        if (entry.children === null) {
+          // A leaf field with no remaining cell is absent (§14.1, non-strict)
+          if (index < cells.length) {
+            utils.setDecodedKey(obj, entry.name, this.parseValueToken(cells[index], line));
+          }
+          index++;
+        } else {
+          utils.setDecodedKey(obj, entry.name, walk(entry.children));
+        }
+      }
+
+      return obj;
+    };
+
+    return walk(fields);
+  }
+
+  /**
+   * Parse a keyed tabular object, consuming its header line (§9.5)
+   */
+  private parseKeyedTabular(
+    header: utils.ParsedHeader,
+    headerDepth: number,
+  ): Record<string, unknown> {
+    this.pos++;
+    return this.parseKeyedTabularBody(header, headerDepth + 1);
+  }
+
+  /**
+   * Parse a keyed tabular object's entry rows at `entryDepth` (§9.5)
+   */
+  private parseKeyedTabularBody(
+    header: utils.ParsedHeader,
+    entryDepth: number,
+  ): Record<string, unknown> {
+    // A fields-bearing header carries no inline content (§6, §14.2)
+    if (header.inline !== '') {
+      throw new ToonDecodingError('Content after a keyed header colon', {
+        lineNumber: this.lines[this.pos - 1]?.lineNumber,
+        line: header.inline,
+      });
+    }
+
+    const fields = header.fields!;
+    const leafCount = utils.countLeafFields(fields);
+    const obj: Record<string, unknown> = {};
+    let count = 0;
+
+    while (this.pos < this.lines.length) {
+      const line = this.lines[this.pos];
+
+      // A keyed scope ends only when the depth decreases (§9.5)
+      if (this.depthOf(line) < entryDepth) {
+        break;
+      }
+
+      if (this.depthOf(line) > entryDepth) {
+        if (this.options.strict) {
+          throw new ToonDecodingError('Over-indented line in keyed tabular scope', {
+            lineNumber: line.lineNumber,
+            line: line.content,
+          });
+        }
+        this.pos++;
         continue;
       }
 
-      if (char === '\\') {
-        escaped = true;
+      // Every line at entry depth containing an unquoted colon is an entry row (§9.5)
+      const colonIndex = utils.findUnquoted(line.content, ':');
+      if (colonIndex < 0) {
+        if (this.options.strict) {
+          throw new ToonDecodingError('Line at entry depth without an unquoted colon', {
+            lineNumber: line.lineNumber,
+            line: line.content,
+          });
+        }
+        this.pos++;
         continue;
       }
 
-      if (char === '"') {
-        inQuotes = !inQuotes;
+      const entryKey = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
+      const rest = utils.trimSpaces(line.content.slice(colonIndex + 1));
+
+      // An empty cell sequence is zero cells, not one empty cell (§9.5, §11.2)
+      const cells = rest === '' ? [] : utils.splitDelimited(rest, header.delimiter);
+      this.checkWidth(cells.length, leafCount, line);
+
+      this.assignKey(obj, entryKey, line);
+      utils.setDecodedKey(obj, entryKey, this.materializeRow(cells, fields, line));
+      count++;
+      this.pos++;
+    }
+
+    this.checkCount(count, header.length, 'keyed entry rows');
+    return obj;
+  }
+
+  /**
+   * Parse an array's list items at `itemDepth` (§9.2, §9.4, §10)
+   */
+  private parseListItems(header: utils.ParsedHeader, itemDepth: number): unknown[] {
+    const items: unknown[] = [];
+
+    while (this.pos < this.lines.length) {
+      const line = this.lines[this.pos];
+      const lineDepth = this.depthOf(line);
+
+      if (lineDepth < itemDepth) {
+        break;
+      }
+
+      // A list scope ends at the first line at item depth that is not a
+      // list-item line (§9.4)
+      if (lineDepth === itemDepth && !this.isListItemLine(line)) {
+        break;
+      }
+
+      if (lineDepth > itemDepth) {
+        if (this.options.strict) {
+          throw new ToonDecodingError('Over-indented line in list scope', {
+            lineNumber: line.lineNumber,
+            line: line.content,
+          });
+        }
+        this.pos++;
         continue;
       }
 
-      if (char === ':' && !inQuotes) {
+      items.push(this.parseListItem(line, itemDepth));
+    }
+
+    this.checkCount(items.length, header.length, 'list items');
+    return items;
+  }
+
+  /**
+   * A list-item line is the bare marker "-" or begins with "- " (§5.2)
+   */
+  private isListItemLine(line: ParsedLine): boolean {
+    return line.content === '-' || line.content.startsWith('- ');
+  }
+
+  /**
+   * Parse one list item (§9.2, §9.4, §10)
+   */
+  private parseListItem(line: ParsedLine, itemDepth: number): unknown {
+    // Bare "-" is an empty-object list item (§10)
+    if (line.content === '-') {
+      this.pos++;
+      return {};
+    }
+
+    const rest = line.content.slice(2);
+
+    // The empty inner array item "- []" (§9.2)
+    if (rest === '[]') {
+      this.pos++;
+      return [];
+    }
+
+    // Synthesize a line standing at the item's content position so header
+    // parsing and depth accounting see the post-marker text (§10)
+    const inner: ParsedLine = {
+      content: rest,
+      indent: line.indent + 2,
+      lineNumber: line.lineNumber,
+      isEmpty: false,
+    };
+
+    const header = this.tryParseHeader(inner);
+
+    if (header !== null) {
+      this.pos++;
+
+      // A keyless header on a hyphen line is the list item itself; its items
+      // stand at itemDepth + 1 (§10)
+      if (header.key === null) {
+        if (header.fields !== null && this.options.strict) {
+          throw new ToonDecodingError(
+            'Keyless fields-bearing header is not valid as a list item',
+            { lineNumber: line.lineNumber, line: line.content },
+          );
+        }
+        return this.parseArrayContent(header, itemDepth + 1);
+      }
+
+      // A keyed first field: the list-item object's fields stand at
+      // itemDepth + 1 and this field's content at itemDepth + 2 (§10)
+      const obj: Record<string, unknown> = {};
+      utils.setDecodedKey(
+        obj,
+        header.key,
+        header.keyed
+          ? this.parseKeyedTabularBody(header, itemDepth + 2)
+          : this.parseArrayContent(header, itemDepth + 2),
+      );
+
+      this.parseListItemRestFields(obj, itemDepth + 1);
+      return obj;
+    }
+
+    // An object whose first field is carried on the hyphen line (§10)
+    const colonIndex = utils.findUnquoted(rest, ':');
+    if (colonIndex >= 0) {
+      const key = this.decodeKeyToken(rest.slice(0, colonIndex), line);
+      const valuePart = utils.trimSpaces(rest.slice(colonIndex + 1));
+      this.pos++;
+
+      const obj: Record<string, unknown> = {};
+
+      if (valuePart === '[]') {
+        utils.setDecodedKey(obj, key, []);
+      } else if (valuePart !== '') {
+        utils.setDecodedKey(obj, key, this.parseValueToken(valuePart, line));
+      } else {
+        // A nested scope opened by the first field sits at itemDepth + 2 (§10)
+        utils.setDecodedKey(obj, key, this.parseNestedScope(itemDepth + 1));
+      }
+
+      this.parseListItemRestFields(obj, itemDepth + 1);
+      return obj;
+    }
+
+    // Primitive list item (§9.4)
+    this.pos++;
+    return this.parseValueToken(rest, line);
+  }
+
+  /**
+   * Parse a list-item object's remaining fields, which stand at `fieldDepth` (§10)
+   */
+  private parseListItemRestFields(
+    obj: Record<string, unknown>,
+    fieldDepth: number,
+  ): void {
+    while (this.pos < this.lines.length) {
+      const line = this.lines[this.pos];
+
+      if (this.depthOf(line) !== fieldDepth || this.isListItemLine(line)) {
+        break;
+      }
+
+      const { key, value } = this.parseFieldLine(line, fieldDepth);
+      this.assignKey(obj, key, line);
+      utils.setDecodedKey(obj, key, value);
+    }
+  }
+
+  /**
+   * Enforce a declared count in strict mode (§14.1)
+   */
+  private checkCount(actual: number, declared: number, what: string): void {
+    if (this.options.strict && actual !== declared) {
+      throw new ToonDecodingError(
+        `Count mismatch for ${what}: expected ${declared}, got ${actual}`,
+      );
+    }
+  }
+
+  /**
+   * Enforce a row's cell count against the header's leaf-field count (§14.1)
+   */
+  private checkWidth(actual: number, expected: number, line: ParsedLine): void {
+    if (this.options.strict && actual !== expected) {
+      throw new ToonDecodingError(
+        `Row width mismatch: expected ${expected} cells, got ${actual}`,
+        { lineNumber: line.lineNumber, line: line.content },
+      );
+    }
+  }
+
+  /**
+   * Decode a key token, unescaping when quoted (§7.4)
+   */
+  private decodeKeyToken(token: string, line: ParsedLine): string {
+    const trimmed = utils.trimSpaces(token);
+
+    if (trimmed.startsWith('"')) {
+      if (!trimmed.endsWith('"') || trimmed.length < 2) {
+        throw new ToonDecodingError('Unterminated quoted key', {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
+      }
+      const unescaped = utils.tryUnescapeString(trimmed.slice(1, -1));
+      if (unescaped.error !== null) {
+        throw new ToonDecodingError(unescaped.error, {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
+      }
+      return unescaped.value as string;
+    }
+
+    return trimmed;
+  }
+
+  /**
+   * Parse a value token per §4 and §7.4
+   */
+  private parseValueToken(token: string, line: ParsedLine | undefined): unknown {
+    const trimmed = utils.trimSpaces(token);
+
+    // A token starting with a quote MUST be a complete quoted token (§7.4)
+    if (trimmed.startsWith('"')) {
+      const closing = this.findClosingQuote(trimmed);
+
+      if (closing < 0) {
+        throw new ToonDecodingError('Unterminated quoted string', {
+          lineNumber: line?.lineNumber,
+          line: line?.content,
+        });
+      }
+
+      if (closing !== trimmed.length - 1) {
+        throw new ToonDecodingError('Characters after closing quote', {
+          lineNumber: line?.lineNumber,
+          line: line?.content,
+        });
+      }
+
+      const unescaped = utils.tryUnescapeString(trimmed.slice(1, -1));
+      if (unescaped.error !== null) {
+        throw new ToonDecodingError(unescaped.error, {
+          lineNumber: line?.lineNumber,
+          line: line?.content,
+        });
+      }
+      return unescaped.value as string;
+    }
+
+    return utils.parseToken(trimmed);
+  }
+
+  /**
+   * Find the index of the quote closing a token that starts with one
+   */
+  private findClosingQuote(token: string): number {
+    let i = 1;
+
+    while (i < token.length) {
+      if (token[i] === '\\') {
+        i += 2;
+        continue;
+      }
+      if (token[i] === '"') {
         return i;
       }
+      i++;
     }
 
     return -1;
   }
 
   /**
-   * Find next sibling line index at the same indentation level
-   */
-  private findNextSiblingIndex(lines: ParsedLine[], currentIndex: number, expectedIndent: number): number {
-    let index = currentIndex + 1;
-
-    while (index < lines.length) {
-      const line = lines[index];
-
-      if (line.isEmpty) {
-        index++;
-        continue;
-      }
-
-      // Return when we find a line at or below the expected indent (sibling or parent level)
-      if (line.indent <= expectedIndent) {
-        return index;
-      }
-
-      index++;
-    }
-
-    return lines.length;
-  }
-
-  /**
-   * Parse a token value per §4
-   */
-  private parseTokenValue(token: string): unknown {
-    token = token.trim();
-
-    // Handle quoted strings
-    if (token.startsWith('"') && token.endsWith('"')) {
-      return utils.unescapeString(token.slice(1, -1));
-    }
-
-    // Use utils.parseToken for type inference
-    return utils.parseToken(token);
-  }
-
-  /**
-   * Expand dotted paths into nested objects per §13.4 (optional)
+   * Expand dotted paths into nested objects (optional feature)
    */
   private expandPaths(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};

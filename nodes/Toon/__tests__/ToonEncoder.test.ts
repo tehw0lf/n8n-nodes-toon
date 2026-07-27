@@ -166,55 +166,50 @@ describe('ToonEncoder', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [1, 2, 3];
       const result = encoder.encode(input);
-      expect(result).toBe('[3]: 1, 2, 3');
+      expect(result).toBe('[3]: 1,2,3');
     });
 
     it('should encode inline array of strings', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = ['a', 'b', 'c'];
       const result = encoder.encode(input);
-      expect(result).toBe('[3]: a, b, c');
+      expect(result).toBe('[3]: a,b,c');
     });
 
     it('should encode inline array of mixed primitives', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [1, 'two', true, null];
       const result = encoder.encode(input);
-      expect(result).toBe('[4]: 1, two, true, null');
+      expect(result).toBe('[4]: 1,two,true,null');
     });
 
-    it('should encode expanded array for long content', () => {
+    it('should keep long primitive arrays inline per §9.1', () => {
       const encoder = new ToonEncoder(defaultOptions);
-      // Need strings long enough to exceed 80 char threshold
-      const input = ['very-long-string-that-will-definitely-force-expansion-by-exceeding-eighty-characters', 'another-item'];
+      // §9.1 has no line-length threshold: primitive arrays are always inline
+      const input = ['very-long-string-that-will-definitely-exceed-eighty-characters-on-one-line', 'another-item'];
       const result = encoder.encode(input);
-      expect(result).toContain('[2]:');
-      expect(result).toContain('  very-long-string-that-will-definitely-force-expansion-by-exceeding-eighty-characters');
-      expect(result).toContain('  another-item');
+      expect(result).toBe(
+        '[2]: very-long-string-that-will-definitely-exceed-eighty-characters-on-one-line,another-item',
+      );
     });
 
     it('should encode array as object property (inline)', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = { numbers: [1, 2, 3] };
       const result = encoder.encode(input);
-      expect(result).toBe('numbers[3]: 1, 2, 3');
+      expect(result).toBe('numbers[3]: 1,2,3');
     });
 
-    it('should encode array as object property (expanded)', () => {
+    it('should encode empty array in object field position as "key: []" (§9.1)', () => {
       const encoder = new ToonEncoder(defaultOptions);
-      // Need long enough string to exceed 80 char threshold
-      const input = { items: ['very-long-item-name-that-will-force-expansion-by-exceeding-eighty-chars-total', 'another-item'] };
-      const result = encoder.encode(input);
-      expect(result).toContain('items[2]:');
-      expect(result).toContain('  very-long-item-name-that-will-force-expansion-by-exceeding-eighty-chars-total');
-      expect(result).toContain('  another-item');
+      const result = encoder.encode({ tags: [] });
+      expect(result).toBe('tags: []');
     });
 
-    it('should encode empty array', () => {
+    it('should encode empty root array as bare "[]" (§9.1)', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const result = encoder.encode([]);
-      // Empty inline array has space after colon
-      expect(result).toBe('[0]: ');
+      expect(result).toBe('[]');
     });
   });
 
@@ -226,22 +221,18 @@ describe('ToonEncoder', () => {
         { name: 'Bob', age: 25 },
       ];
       const result = encoder.encode(input);
-      expect(result).toContain('[2]{age, name}:');
-      expect(result).toContain('  30, Alice');
-      expect(result).toContain('  25, Bob');
+      expect(result).toBe('[2]{name,age}:\n  Alice,30\n  Bob,25');
     });
 
-    it('should encode tabular array with different field order', () => {
+    it('should use the first object key encounter order for fields (§9.3)', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [
         { x: 1, y: 2 },
         { y: 4, x: 3 },
       ];
       const result = encoder.encode(input);
-      // Fields should be sorted alphabetically
-      expect(result).toContain('[2]{x, y}:');
-      expect(result).toContain('  1, 2');
-      expect(result).toContain('  3, 4');
+      // Field order follows the first object; later objects are reordered to match
+      expect(result).toBe('[2]{x,y}:\n  1,2\n  3,4');
     });
 
     it('should encode tabular array as object property', () => {
@@ -253,9 +244,7 @@ describe('ToonEncoder', () => {
         ],
       };
       const result = encoder.encode(input);
-      expect(result).toContain('users[2]{active, name}:');
-      expect(result).toContain('  true, Alice');
-      expect(result).toContain('  false, Bob');
+      expect(result).toBe('users[2]{name,active}:\n  Alice,true\n  Bob,false');
     });
 
     it('should handle tabular array with null values', () => {
@@ -265,9 +254,89 @@ describe('ToonEncoder', () => {
         { a: null, b: 2 },
       ];
       const result = encoder.encode(input);
-      expect(result).toContain('[2]{a, b}:');
-      expect(result).toContain('  1, null');
-      expect(result).toContain('  null, 2');
+      expect(result).toBe('[2]{a,b}:\n  1,null\n  null,2');
+    });
+
+    it('should collapse nested-uniform columns into nested field groups (§9.3)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        orders: [
+          { id: 1, customer: { name: 'Ada', country: 'DK' }, total: 99 },
+          { id: 2, customer: { name: 'Bob', country: 'UK' }, total: 149 },
+        ],
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe('orders[2]{id,customer{name,country},total}:\n  1,Ada,DK,99\n  2,Bob,UK,149');
+    });
+
+    it('should not use tabular form when a column mixes null with objects (§9.3)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = [{ a: { x: 1 } }, { a: null }];
+      const result = encoder.encode(input);
+      // A column that is neither uniform-primitive nor nested-uniform forces list form
+      expect(result).toBe('[2]:\n  - a:\n      x: 1\n  - a: null');
+    });
+
+    it('should not use tabular form for arrays containing an empty object (§9.3)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode([{}, { a: 1 }]);
+      expect(result).toBe('[2]:\n  -\n  - a: 1');
+    });
+  });
+
+  describe('encode keyed tabular objects (§9.5)', () => {
+    it('should encode an object of uniform objects as a keyed table', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        users: {
+          alice: { age: 30, city: 'Berlin' },
+          bob: { age: 25, city: 'Oslo' },
+        },
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe('users[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo');
+    });
+
+    it('should omit the key at the document root (§9.5)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        alice: { age: 30, city: 'Berlin' },
+        bob: { age: 25, city: 'Oslo' },
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe('[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo');
+    });
+
+    it('should not use keyed form for a single-entry object (§9.5)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode({ users: { alice: { age: 30 } } });
+      expect(result).toBe('users:\n  alice:\n    age: 30');
+    });
+
+    it('should not use keyed form when entry values are non-uniform (§9.5)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode({ a: { x: 1 }, b: { y: 2 } });
+      expect(result).toBe('a:\n  x: 1\nb:\n  y: 2');
+    });
+
+    it('should support nested field groups in keyed headers (§9.5)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        alice: { age: 30, loc: { city: 'Berlin', country: 'DE' } },
+        bob: { age: 25, loc: { city: 'Oslo', country: 'NO' } },
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe('[2:]{age,loc{city,country}}:\n  alice: 30,Berlin,DE\n  bob: 25,Oslo,NO');
+    });
+
+    it('should quote entry keys that require quoting (§7.3)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        'my-key': { a: 1 },
+        other: { a: 2 },
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe('[2:]{a}:\n  "my-key": 1\n  other: 2');
     });
   });
 
@@ -276,19 +345,14 @@ describe('ToonEncoder', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [1, { name: 'Alice' }, 'text'];
       const result = encoder.encode(input);
-      expect(result).toContain('[3]:');
-      expect(result).toContain('  1');
-      expect(result).toContain('  name: Alice');
-      expect(result).toContain('  text');
+      expect(result).toBe('[3]:\n  - 1\n  - name: Alice\n  - text');
     });
 
     it('should encode nested arrays', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [[1, 2], [3, 4]];
       const result = encoder.encode(input);
-      expect(result).toContain('[2]:');
-      expect(result).toContain('  [2]: 1, 2');
-      expect(result).toContain('  [2]: 3, 4');
+      expect(result).toBe('[2]:\n  - [2]: 1,2\n  - [2]: 3,4');
     });
 
     it('should encode array of non-uniform objects', () => {
@@ -298,12 +362,80 @@ describe('ToonEncoder', () => {
         { name: 'Bob', city: 'NYC' },
       ];
       const result = encoder.encode(input);
-      // Non-uniform objects should use expanded form
-      expect(result).toContain('[2]:');
-      expect(result).toContain('  name: Alice');
-      expect(result).toContain('  age: 30');
-      expect(result).toContain('  name: Bob');
-      expect(result).toContain('  city: NYC');
+      // Non-uniform objects use list form with the first field on the hyphen line (§10)
+      expect(result).toBe('[2]:\n  - name: Alice\n    age: 30\n  - name: Bob\n    city: NYC');
+    });
+
+    it('should encode an empty inner array as "- [0]:" (§9.2)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode([[], [1]]);
+      expect(result).toBe('[2]:\n  - [0]:\n  - [1]: 1');
+    });
+  });
+
+  describe('objects as list items (§10)', () => {
+    it('should place the first field on the hyphen line', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        items: [
+          { id: 1, name: 'First' },
+          { id: 2, name: 'Second', extra: true },
+        ],
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe(
+        'items[2]:\n  - id: 1\n    name: First\n  - id: 2\n    name: Second\n    extra: true',
+      );
+    });
+
+    it('should emit a bare hyphen for an empty object list item', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode({ items: [{}, {}] });
+      expect(result).toBe('items[2]:\n  -\n  -');
+    });
+
+    it('should carry a tabular first field on the hyphen line with rows at depth +2', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const input = {
+        items: [
+          {
+            users: [
+              { id: 1, name: 'Ada' },
+              { id: 2, name: 'Bob' },
+            ],
+            status: 'active',
+          },
+        ],
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe(
+        'items[1]:\n  - users[2]{id,name}:\n      1,Ada\n      2,Bob\n    status: active',
+      );
+    });
+
+    it('should carry a keyed tabular first field on the hyphen line (§10)', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      // The second element's differing key set defeats tabular detection (§9.3),
+      // so the array uses list form and §10 governs the first field
+      const input = {
+        items: [
+          {
+            users: { alice: { age: 30 }, bob: { age: 25 } },
+            status: 'active',
+          },
+          { other: 1 },
+        ],
+      };
+      const result = encoder.encode(input);
+      expect(result).toBe(
+        'items[2]:\n  - users[2:]{age}:\n      alice: 30\n      bob: 25\n    status: active\n  - other: 1',
+      );
+    });
+
+    it('should nest an object-valued first field at depth +2', () => {
+      const encoder = new ToonEncoder(defaultOptions);
+      const result = encoder.encode({ items: [{ meta: { a: 1 }, b: 2 }, { other: 1 }] });
+      expect(result).toBe('items[2]:\n  - meta:\n      a: 1\n    b: 2\n  - other: 1');
     });
   });
 
@@ -312,7 +444,7 @@ describe('ToonEncoder', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, delimiter: ',' });
       const input = [1, 2, 3];
       const result = encoder.encode(input);
-      expect(result).toBe('[3]: 1, 2, 3');
+      expect(result).toBe('[3]: 1,2,3');
     });
 
     it('should use tab delimiter', () => {
@@ -333,7 +465,7 @@ describe('ToonEncoder', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, delimiter: ',' });
       const input = ['a,b', 'c'];
       const result = encoder.encode(input);
-      expect(result).toBe('[2]: "a,b", c');
+      expect(result).toBe('[2]: "a,b",c');
     });
 
     it('should quote strings containing tab when using tab delimiter', () => {
@@ -496,7 +628,7 @@ describe('ToonEncoder', () => {
       const encoder = new ToonEncoder(defaultOptions);
       const input = [null, undefined, 1];
       const result = encoder.encode(input);
-      expect(result).toBe('[3]: null, null, 1');
+      expect(result).toBe('[3]: null,null,1');
     });
 
     it('should handle deeply nested structures', () => {
@@ -567,7 +699,7 @@ describe('ToonEncoder', () => {
       expect(result).toContain('  name: Alice');
       expect(result).toContain('  email: alice@example.com');
       expect(result).toContain('  active: true');
-      expect(result).toContain('  tags[2]: admin, verified');
+      expect(result).toContain('  tags[2]: admin,verified');
     });
 
     it('should encode data with multiple tabular arrays', () => {
@@ -583,8 +715,8 @@ describe('ToonEncoder', () => {
         ],
       };
       const result = encoder.encode(input);
-      expect(result).toContain('users[2]{age, name}:');
-      expect(result).toContain('products[2]{id, price}:');
+      expect(result).toContain('users[2]{name,age}:');
+      expect(result).toContain('products[2]{id,price}:');
     });
 
     it('should encode mixed nested structure', () => {
@@ -605,8 +737,8 @@ describe('ToonEncoder', () => {
       // "1.0" is quoted because it looks like a number
       expect(result).toContain('  version: "1.0"');
       expect(result).toContain('  created: 2024-01-01');
-      expect(result).toContain('items[2]{id, value}:');
-      expect(result).toContain('flags[3]: true, false, true');
+      expect(result).toContain('items[2]{id,value}:');
+      expect(result).toContain('flags[3]: true,false,true');
     });
   });
 

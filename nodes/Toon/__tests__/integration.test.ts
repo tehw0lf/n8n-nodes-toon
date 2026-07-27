@@ -348,8 +348,8 @@ describe('Integration Tests', () => {
       const json = decoder.decode(toon1);
       const toon2 = encoder2.encode(json);
 
-      expect(toon1).toContain('[2]{a, b, c}:');
-      expect(toon1).toContain('1, 2, 3');
+      expect(toon1).toContain('[2]{a,b,c}:');
+      expect(toon1).toContain('1,2,3');
 
       expect(toon2).toContain('[2\t]{a\tb\tc}:');
       expect(toon2).toContain('1\t2\t3');
@@ -371,8 +371,8 @@ describe('Integration Tests', () => {
       expect(toon).toBe('');
 
       const result = decoder.decode('');
-      // Empty TOON decodes to null in current implementation
-      expect(result).toBe(null);
+      // §5: an empty document decodes to an empty object
+      expect(result).toEqual({});
     });
 
     it('should handle very deep nesting', () => {
@@ -482,7 +482,7 @@ describe('Integration Tests', () => {
       const decoder = new ToonDecoder({ indent: 2, strict: false, expandPaths: 'off' });
 
       const toon = encoder.encode(input);
-      expect(toon).toBe('tags[3]: admin, ops, dev');
+      expect(toon).toBe('tags[3]: admin,ops,dev');
 
       const result = decoder.decode(toon);
       expect(result).toEqual(input);
@@ -498,7 +498,8 @@ describe('Integration Tests', () => {
       const decoder = new ToonDecoder({ indent: 2, strict: false, expandPaths: 'off' });
 
       const toon = encoder.encode(input);
-      expect(toon).toContain('[2]{price, qty, sku}:');
+      // Field order follows the first object's key encounter order (§9.3)
+      expect(toon).toContain('[2]{sku,qty,price}:');
 
       const result = decoder.decode(toon);
       expect(result).toEqual(input);

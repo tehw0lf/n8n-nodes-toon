@@ -73,10 +73,11 @@ describe('ToonDecoder', () => {
       expect(decoder.decode('"line1\\rline2"')).toBe('line1\rline2');
     });
 
-    it('should decode empty input as null', () => {
+    it('should decode empty input as an empty object (§5)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      expect(decoder.decode('')).toBe(null);
-      expect(decoder.decode('  \n  \n  ')).toBe(null);
+      // §5: an empty document decodes to an empty object
+      expect(decoder.decode('')).toEqual({});
+      expect(decoder.decode('  \n  \n  ')).toEqual({});
     });
   });
 
@@ -153,7 +154,7 @@ describe('ToonDecoder', () => {
   describe('decode primitive arrays', () => {
     it('should decode inline array of numbers', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[3]: 1, 2, 3';
+      const toon = '[3]: 1,2,3';
       const result = decoder.decode(toon);
       expect(result).toEqual([1, 2, 3]);
     });
@@ -172,11 +173,18 @@ describe('ToonDecoder', () => {
       expect(result).toEqual([1, 'two', true, null]);
     });
 
-    it('should decode expanded array', () => {
+    it('should decode a list-form array of primitives (§9.4)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[3]:\n  1\n  2\n  3';
+      const toon = '[3]:\n  - 1\n  - 2\n  - 3';
       const result = decoder.decode(toon);
       expect(result).toEqual([1, 2, 3]);
+    });
+
+    it('should reject bare scalar lines inside an array scope (§5.2, §14.2)', () => {
+      const decoder = new ToonDecoder({ ...defaultOptions, strict: true });
+      // Values without "- " markers are scalar lines, invalid outside root
+      // position, so no list items are read and the declared count fails
+      expect(() => decoder.decode('[3]:\n  1\n  2\n  3')).toThrow();
     });
 
     it('should decode empty array inline', () => {
@@ -200,16 +208,16 @@ describe('ToonDecoder', () => {
       expect(result).toEqual({ numbers: [1, 2, 3] });
     });
 
-    it('should decode array as object property (expanded)', () => {
+    it('should decode array as object property in list form (§9.4)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = 'items[2]:\n  first\n  second';
+      const toon = 'items[2]:\n  - first\n  - second';
       const result = decoder.decode(toon);
       expect(result).toEqual({ items: ['first', 'second'] });
     });
 
     it('should decode array with quoted strings', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[3]: "a,b", c, "true"';
+      const toon = '[3]: "a,b",c,"true"';
       const result = decoder.decode(toon);
       expect(result).toEqual(['a,b', 'c', 'true']);
     });
@@ -262,21 +270,21 @@ describe('ToonDecoder', () => {
   describe('decode mixed arrays', () => {
     it('should decode array with mixed types', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[3]:\n  1\n  name: Alice\n  text';
+      const toon = '[3]:\n  - 1\n  - name: Alice\n  - text';
       const result = decoder.decode(toon);
       expect(result).toEqual([1, { name: 'Alice' }, 'text']);
     });
 
     it('should decode nested arrays', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[2]:\n  [2]: 1, 2\n  [2]: 3, 4';
+      const toon = '[2]:\n  - [2]: 1,2\n  - [2]: 3,4';
       const result = decoder.decode(toon);
       expect(result).toEqual([[1, 2], [3, 4]]);
     });
 
     it('should decode array of objects (non-uniform)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[2]:\n  name: Alice\n  age: 30\n  name: Bob\n  city: NYC';
+      const toon = '[2]:\n  - name: Alice\n    age: 30\n  - name: Bob\n    city: NYC';
       const result = decoder.decode(toon);
       expect(result).toEqual([
         { name: 'Alice', age: 30 },
@@ -288,7 +296,7 @@ describe('ToonDecoder', () => {
   describe('delimiter handling', () => {
     it('should decode comma-delimited array', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      const toon = '[3]: 1, 2, 3';
+      const toon = '[3]: 1,2,3';
       const result = decoder.decode(toon);
       expect(result).toEqual([1, 2, 3]);
     });
@@ -371,7 +379,7 @@ describe('ToonDecoder', () => {
 
     it('should allow correct array counts in strict mode', () => {
       const decoder = new ToonDecoder(strictOptions);
-      const toon = '[3]: 1, 2, 3';
+      const toon = '[3]: 1,2,3';
       const result = decoder.decode(toon);
       expect(result).toEqual([1, 2, 3]);
     });
@@ -457,7 +465,8 @@ describe('ToonDecoder', () => {
       expect(decoder.decode('key: 0.5')).toEqual({ key: 0.5 });
       expect(decoder.decode('key: 0e1')).toEqual({ key: 0 });
       expect(decoder.decode('key: -0.5')).toEqual({ key: -0.5 });
-      expect(decoder.decode('key: -0e1')).toEqual({ key: -0 });
+      // §4: negative zero decodes to zero
+      expect(decoder.decode('key: -0e1')).toEqual({ key: 0 });
     });
   });
 
@@ -468,15 +477,14 @@ describe('ToonDecoder', () => {
       expect(decoder.decode('foo[2][bar]: x')).toEqual({ 'foo[2][bar]': 'x' });
     });
 
-    it('should still parse valid array headers with whitespace between ] and :', () => {
+    it('should parse a well-formed array header', () => {
       const decoder = new ToonDecoder(defaultOptions);
       expect(decoder.decode('items[2]: a, b')).toEqual({ items: ['a', 'b'] });
     });
 
-    it('should throw in strict mode when non-whitespace appears between ] and : (§14 v3.0.3)', () => {
+    it('should throw in strict mode when content appears between ] and : (§6, §14.2)', () => {
       const decoder = new ToonDecoder({ indent: 2, strict: true, expandPaths: 'off' });
       expect(() => decoder.decode('foo[2][bar]: x')).toThrow(ToonDecodingError);
-      expect(() => decoder.decode('foo[2][bar]: x')).toThrow('MUST NOT be parsed as array header');
     });
   });
 

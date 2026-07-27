@@ -318,11 +318,11 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 - **n8n version:** 0.200.0 or later
 - **Node.js:** 18.x or later
-- **TOON Specification:** v3.3
+- **TOON Specification:** v4.1
 
 ## Specification Compliance
 
-This node implements **TOON Specification v3.3** with comprehensive coverage of all core features and major optional features.
+This node implements **TOON Specification v4.1** in full: every normative requirement of Sections 1–16 for encoders and decoders.
 
 ### Implemented Features
 
@@ -331,17 +331,27 @@ This node implements **TOON Specification v3.3** with comprehensive coverage of 
 - Indentation-based structure with configurable spacing
 - Array length declarations `[N]`
 - Tabular arrays for uniform objects `[N]{field1,field2}:`
+- Nested field groups for uniform nested-object columns (§9.3): `orders[2]{id,customer{name,country},total}:`
+- Keyed tabular form for objects of uniform objects (§9.5): `users[2:]{age,city}:`
+- Hyphen syntax for objects as list items, including headers carried on the hyphen line (§10)
+- Full-line comment lines, stripped by the decoder and never emitted by the encoder (§5.1)
 - All three delimiters: comma (default), tab, pipe
 - Deterministic string quoting and escaping
-- Strict mode validation with array count and width checking
+- CRLF input, byte-order-mark removal, and trailing-space handling (§12)
+- Strict mode validation per the §14 checklist (counts, row widths, header syntax, duplicate keys, indentation)
 
 ✅ **Optional Features**
 - **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
 
-### Not Implemented
+### Notes on Encoder Output
 
-❌ **Hyphen Syntax for List-Item Objects (§10)** - Optional YAML-style compact notation for objects in arrays. This is a purely cosmetic encoding optimization that doesn't affect functionality or data compatibility. Our implementation uses standard object indentation instead, which is equally spec-compliant and easier to maintain.
+The encoder selects a form from each value's shape and position, as §1.4 requires, rather than by preference:
+
+- Uniform arrays of objects use tabular form; objects of uniform objects use keyed tabular form.
+- Primitive arrays are always inline (§9.1 defines no line-length threshold).
+- Empty arrays are `key: []` in field position and `[]` at the root; the legacy `key[0]:` form is accepted on decode but never emitted.
+- Field order follows the first object's key encounter order, so decoded elements of tabular and keyed tabular forms carry the header's field order (§2).
 
 ### Round-Trip Guarantee
 
@@ -463,7 +473,7 @@ See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml)
 
 ## Resources
 
-- **TOON Specification v3.3:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
+- **TOON Specification v4.1:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
 - **n8n Documentation:** https://docs.n8n.io/
 - **Community Nodes Guide:** https://docs.n8n.io/integrations/community-nodes/
 - **GitHub Repository:** https://github.com/tehw0lf/n8n-nodes-toon
@@ -483,4 +493,4 @@ Contributions are welcome! Please open an issue or pull request on GitHub.
 
 ---
 
-**Note:** This node implements the [TOON Specification v3.3](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
+**Note:** This node implements the [TOON Specification v4.1](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
