@@ -9,7 +9,7 @@
 import { ToonEncoder } from '../ToonEncoder';
 import { ToonDecoder } from '../ToonDecoder';
 import type { DecoderOptions, EncoderOptions } from '../types';
-import { ToonEncodingError } from '../types';
+import { ToonDecodingError, ToonEncodingError } from '../types';
 
 const encoderOptions: EncoderOptions = {
   indent: 2,
@@ -126,7 +126,7 @@ describe('TOON v4.1 conformance', () => {
 
     it('does not treat a tab-indented "#" line as a comment (§5.1)', () => {
       // Only spaces may precede the "#"; a leading tab is an indentation error
-      expect(() => decode('a: 1\n\t# not a comment')).toThrow();
+      expect(() => decode('a: 1\n\t# not a comment')).toThrow(ToonDecodingError);
     });
   });
 
@@ -154,19 +154,19 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('errors when the entry row count does not match N', () => {
-      expect(() => decode('u[3:]{a}:\n  x: 1\n  y: 2')).toThrow();
+      expect(() => decode('u[3:]{a}:\n  x: 1\n  y: 2')).toThrow(ToonDecodingError);
     });
 
     it('errors when an entry row is too narrow', () => {
-      expect(() => decode('u[1:]{a,b}:\n  x: 1')).toThrow();
+      expect(() => decode('u[1:]{a,b}:\n  x: 1')).toThrow(ToonDecodingError);
     });
 
     it('treats a bare entry key as zero cells (§9.5)', () => {
-      expect(() => decode('u[1:]{a}:\n  x:')).toThrow();
+      expect(() => decode('u[1:]{a}:\n  x:')).toThrow(ToonDecodingError);
     });
 
     it('errors on a line at entry depth without an unquoted colon', () => {
-      expect(() => decode('u[2:]{a}:\n  x: 1\n  bare')).toThrow();
+      expect(() => decode('u[2:]{a}:\n  x: 1\n  bare')).toThrow(ToonDecodingError);
     });
 
     it('does not apply the colon-before-delimiter rule at entry depth', () => {
@@ -183,21 +183,21 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('requires a field list on a keyed header (§6)', () => {
-      expect(() => decode('u[2:]:\n  x: 1\n  y: 2')).toThrow();
+      expect(() => decode('u[2:]:\n  x: 1\n  y: 2')).toThrow(ToonDecodingError);
     });
 
     it('rejects a keyless keyed header outside root position (§14.2)', () => {
-      expect(() => decode('a:\n  [2:]{f}:\n    x: 1\n    y: 2')).toThrow();
+      expect(() => decode('a:\n  [2:]{f}:\n    x: 1\n    y: 2')).toThrow(ToonDecodingError);
     });
   });
 
   describe('header grammar (§6, §14.2)', () => {
     it('rejects an empty field list', () => {
-      expect(() => decode('a[1]{}:\n  1')).toThrow();
+      expect(() => decode('a[1]{}:\n  1')).toThrow(ToonDecodingError);
     });
 
     it('rejects a duplicated field name in one field list', () => {
-      expect(() => decode('a[1]{x,x}:\n  1,2')).toThrow();
+      expect(() => decode('a[1]{x,x}:\n  1,2')).toThrow(ToonDecodingError);
     });
 
     it('allows the same name at different nesting levels', () => {
@@ -205,19 +205,19 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('rejects leading zeros in the declared length', () => {
-      expect(() => decode('a[03]: 1,2,3')).toThrow();
+      expect(() => decode('a[03]: 1,2,3')).toThrow(ToonDecodingError);
     });
 
     it('rejects whitespace between a key and its bracket segment', () => {
-      expect(() => decode('foo [2]: 1,2')).toThrow();
+      expect(() => decode('foo [2]: 1,2')).toThrow(ToonDecodingError);
     });
 
     it('rejects inline content after a fields-bearing header', () => {
-      expect(() => decode('items[2]{a,b}: 1,2')).toThrow();
+      expect(() => decode('items[2]{a,b}: 1,2')).toThrow(ToonDecodingError);
     });
 
     it('rejects a keyless header in object-field position', () => {
-      expect(() => decode('a:\n  [2]: x,y')).toThrow();
+      expect(() => decode('a:\n  [2]: x,y')).toThrow(ToonDecodingError);
     });
 
     it('treats a dotted key as a single literal key', () => {
@@ -245,15 +245,15 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('rejects content after a completed root array', () => {
-      expect(() => decode('[1]: 1\nx: 2')).toThrow();
+      expect(() => decode('[1]: 1\nx: 2')).toThrow(ToonDecodingError);
     });
 
     it('rejects content after a completed keyed tabular root', () => {
-      expect(() => decode('[2:]{a}:\n  x: 1\n  y: 2\nz: 3')).toThrow();
+      expect(() => decode('[2:]{a}:\n  x: 1\n  y: 2\nz: 3')).toThrow(ToonDecodingError);
     });
 
     it('rejects two depth-0 scalar lines', () => {
-      expect(() => decode('hello\nworld')).toThrow();
+      expect(() => decode('hello\nworld')).toThrow(ToonDecodingError);
     });
 
     it('decodes a single scalar line as a root primitive', () => {
@@ -291,7 +291,7 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('rejects characters after a closing quote (§7.4)', () => {
-      expect(() => decode('a: "x"y')).toThrow();
+      expect(() => decode('a: "x"y')).toThrow(ToonDecodingError);
     });
 
     it('accepts an unquoted token an encoder would have quoted (§7.4)', () => {
@@ -306,7 +306,7 @@ describe('TOON v4.1 conformance', () => {
 
   describe('duplicate sibling keys (§14.3)', () => {
     it('errors in strict mode', () => {
-      expect(() => decode('a: 1\na: 2')).toThrow();
+      expect(() => decode('a: 1\na: 2')).toThrow(ToonDecodingError);
     });
 
     it('applies last-write-wins in non-strict mode', () => {
@@ -314,7 +314,7 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('treats keyed entry keys as sibling keys', () => {
-      expect(() => decode('u[2:]{a}:\n  x: 1\n  x: 2')).toThrow();
+      expect(() => decode('u[2:]{a}:\n  x: 1\n  x: 2')).toThrow(ToonDecodingError);
     });
   });
 
@@ -402,15 +402,15 @@ describe('TOON v4.1 conformance', () => {
 
   describe('blank lines and header spans (§12)', () => {
     it('errors on a blank line between tabular rows in strict mode', () => {
-      expect(() => decode('a[2]{x}:\n  1\n\n  2')).toThrow();
+      expect(() => decode('a[2]{x}:\n  1\n\n  2')).toThrow(ToonDecodingError);
     });
 
     it('errors on a blank line between list items in strict mode', () => {
-      expect(() => decode('a[2]:\n  - 1\n\n  - 2')).toThrow();
+      expect(() => decode('a[2]:\n  - 1\n\n  - 2')).toThrow(ToonDecodingError);
     });
 
     it('errors on a blank line between keyed entry rows in strict mode', () => {
-      expect(() => decode('u[2:]{x}:\n  a: 1\n\n  b: 2')).toThrow();
+      expect(() => decode('u[2:]{x}:\n  a: 1\n\n  b: 2')).toThrow(ToonDecodingError);
     });
 
     it('ignores a blank line between a header and its first row', () => {
@@ -435,17 +435,17 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('still errors when a blank accompanies a comment inside a span', () => {
-      expect(() => decode('a[2]{x}:\n  1\n\n# c\n  2')).toThrow();
-      expect(() => decode('a[2]{x}:\n  1\n# c\n\n  2')).toThrow();
+      expect(() => decode('a[2]{x}:\n  1\n\n# c\n  2')).toThrow(ToonDecodingError);
+      expect(() => decode('a[2]{x}:\n  1\n# c\n\n  2')).toThrow(ToonDecodingError);
     });
 
     it('errors on a blank between a list-item object\'s own fields (§10, §12)', () => {
-      expect(() => decode('a[1]:\n  - id: 1\n\n    n: 2')).toThrow();
+      expect(() => decode('a[1]:\n  - id: 1\n\n    n: 2')).toThrow(ToonDecodingError);
     });
 
     it('errors on a blank inside an object nested within a span', () => {
-      expect(() => decode('a[1]:\n  - m:\n      x: 1\n\n      y: 2')).toThrow();
-      expect(() => decode('o:\n  u[2:]{x}:\n    a: 1\n\n    b: 2')).toThrow();
+      expect(() => decode('a[1]:\n  - m:\n      x: 1\n\n      y: 2')).toThrow(ToonDecodingError);
+      expect(() => decode('o:\n  u[2:]{x}:\n    a: 1\n\n    b: 2')).toThrow(ToonDecodingError);
     });
 
     it('allows blanks in plain object scopes outside any span', () => {
@@ -475,10 +475,10 @@ describe('TOON v4.1 conformance', () => {
     });
 
     it('rejects invalid escapes and lone surrogates on decode (§7.1)', () => {
-      expect(() => decode('a: "\\ud800"')).toThrow();
-      expect(() => decode('a: "\\q"')).toThrow();
-      expect(() => decode('a: "\\u12"')).toThrow();
-      expect(() => decode('a: "abc')).toThrow();
+      expect(() => decode('a: "\\ud800"')).toThrow(ToonDecodingError);
+      expect(() => decode('a: "\\q"')).toThrow(ToonDecodingError);
+      expect(() => decode('a: "\\u12"')).toThrow(ToonDecodingError);
+      expect(() => decode('a: "abc')).toThrow(ToonDecodingError);
     });
 
     it('normalizes NaN, Infinity, and undefined to null (§3)', () => {

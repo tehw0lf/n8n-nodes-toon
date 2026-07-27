@@ -184,7 +184,7 @@ describe('ToonDecoder', () => {
       const decoder = new ToonDecoder({ ...defaultOptions, strict: true });
       // Values without "- " markers are scalar lines, invalid outside root
       // position, so no list items are read and the declared count fails
-      expect(() => decoder.decode('[3]:\n  1\n  2\n  3')).toThrow();
+      expect(() => decoder.decode('[3]:\n  1\n  2\n  3')).toThrow(ToonDecodingError);
     });
 
     it('should decode empty array inline', () => {
@@ -654,17 +654,17 @@ flags[3]: true, false, true`;
   describe('v3.3: bracket length leading zeros rejected (§6)', () => {
     it('should error on [03] at root in strict mode', () => {
       const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
-      expect(() => strictDecoder.decode('[03]:')).toThrow();
+      expect(() => strictDecoder.decode('[03]:')).toThrow(ToonDecodingError);
     });
 
     it('should error on [0001] at root in strict mode', () => {
       const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
-      expect(() => strictDecoder.decode('[0001]:')).toThrow();
+      expect(() => strictDecoder.decode('[0001]:')).toThrow(ToonDecodingError);
     });
 
     it('should error on items[03] in object context in strict mode', () => {
       const strictDecoder = new ToonDecoder({ ...defaultOptions, strict: true });
-      expect(() => strictDecoder.decode('items[03]: a,b,c')).toThrow();
+      expect(() => strictDecoder.decode('items[03]: a,b,c')).toThrow(ToonDecodingError);
     });
 
     it('should still accept [0]: as valid zero-length array', () => {
@@ -696,12 +696,12 @@ flags[3]: true, false, true`;
 
     it('should reject lone surrogate \\ud800', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      expect(() => decoder.decode('val: "\\ud800"')).toThrow();
+      expect(() => decoder.decode('val: "\\ud800"')).toThrow(ToonDecodingError);
     });
 
     it('should reject unknown escape \\x41', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      expect(() => decoder.decode('val: "\\x41"')).toThrow();
+      expect(() => decoder.decode('val: "\\x41"')).toThrow(ToonDecodingError);
     });
   });
 });
