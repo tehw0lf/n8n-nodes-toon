@@ -6,12 +6,6 @@
 import type { Delimiter, FieldEntry } from './types';
 
 /**
- * Reject host strings carrying an unpaired surrogate per §3.
- *
- * Such a string is not representable in TOON, and encoders MUST error rather
- * than emit it or silently substitute U+FFFD.
- */
-/**
  * Whether a host string is representable in TOON, i.e. carries no unpaired
  * surrogate (§3)
  */
@@ -24,6 +18,12 @@ export function isRepresentableString(str: string): boolean {
   }
 }
 
+/**
+ * Reject host strings carrying an unpaired surrogate per §3.
+ *
+ * Such a string is not representable in TOON, and encoders MUST error rather
+ * than emit it or silently substitute U+FFFD.
+ */
 export function assertNoLoneSurrogate(str: string): void {
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
@@ -156,6 +156,21 @@ export function unescapeString(str: string): string {
 export function tryUnescapeString(str: string): { value: string | null; error: string | null } {
   try {
     return { value: unescapeString(str), error: null };
+  } catch (error) {
+    return { value: null, error: (error as Error).message };
+  }
+}
+
+/**
+ * Unescape a complete quoted token without throwing, reporting malformation as
+ * a message so callers can attach line context (§7.4).
+ */
+export function tryUnescapeQuotedToken(
+  trimmed: string,
+  what: string,
+): { value: string | null; error: string | null } {
+  try {
+    return { value: unescapeQuotedToken(trimmed, what), error: null };
   } catch (error) {
     return { value: null, error: (error as Error).message };
   }
@@ -409,6 +424,52 @@ export function splitDelimited(text: string, delimiter: Delimiter): string[] {
 }
 
 /**
+ * Find the quote closing a token that starts with one, ignoring escaped
+ * quotes. Returns -1 when the token is unterminated.
+ */
+export function findClosingQuote(token: string): number {
+  let i = 1;
+
+  while (i < token.length) {
+    if (token[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (token[i] === '"') {
+      return i;
+    }
+    i++;
+  }
+
+  return -1;
+}
+
+/**
+ * Unescape a token that must be a complete quoted token per §7.4.
+ *
+ * The closing quote MUST be the token's last character; any character after
+ * it is an error. Checking `endsWith('"')` alone is not sufficient, since a
+ * token such as `"a"x"b"` both starts and ends with a quote while carrying
+ * content past its real closing quote.
+ *
+ * @throws when the token is unterminated, carries trailing characters, or
+ * contains an invalid escape
+ */
+export function unescapeQuotedToken(trimmed: string, what: string): string {
+  const closing = findClosingQuote(trimmed);
+
+  if (closing < 0) {
+    throw new Error(`Unterminated quoted ${what}: ${trimmed}`);
+  }
+
+  if (closing !== trimmed.length - 1) {
+    throw new Error(`Characters after closing quote in ${what}: ${trimmed}`);
+  }
+
+  return unescapeString(trimmed.slice(1, closing));
+}
+
+/**
  * Trim surrounding spaces (exactly U+0020, no other whitespace) per §12
  */
 export function trimSpaces(text: string): string {
@@ -492,10 +553,7 @@ function decodeFieldName(token: string): string {
   }
 
   if (trimmed.startsWith('"')) {
-    if (!trimmed.endsWith('"') || trimmed.length < 2) {
-      throw new Error(`Unterminated quoted field name: ${trimmed}`);
-    }
-    return unescapeString(trimmed.slice(1, -1));
+    return unescapeQuotedToken(trimmed, 'field name');
   }
 
   return trimmed;
@@ -669,10 +727,7 @@ export function parseHeader(content: string): ParsedHeader | null {
   let key: string | null = null;
   if (keyPart !== '') {
     if (keyPart.startsWith('"')) {
-      if (!keyPart.endsWith('"') || keyPart.length < 2) {
-        throw new Error(`Unterminated quoted key in header: ${content}`);
-      }
-      key = unescapeString(keyPart.slice(1, -1));
+      key = unescapeQuotedToken(keyPart, 'header key');
     } else {
       key = keyPart;
     }

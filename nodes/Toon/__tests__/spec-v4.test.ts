@@ -600,4 +600,56 @@ describe('TOON v4.1 conformance', () => {
       expect(decode('[3]: 3,1,2')).toEqual([3, 1, 2]);
     });
   });
+
+  describe('root depth (§5, §12, §14.2)', () => {
+    it.each([
+      ['an empty array', '  []'],
+      ['a numeric primitive', '  42'],
+      ['a string primitive', '  hello'],
+      ['an object field', '  a: 1'],
+      ['an array header', '  [2]: 1,2'],
+    ])('rejects an indented root document containing %s', (_label, toon) => {
+      expect(() => decode(toon)).toThrow(ToonDecodingError);
+    });
+
+    it.each([
+      ['[]', []],
+      ['42', 42],
+      ['hello', 'hello'],
+      ['[2]: 1,2', [1, 2]],
+      ['a: 1', { a: 1 }],
+    ])('accepts %s at depth 0', (toon, expected) => {
+      expect(decode(toon)).toEqual(expected);
+    });
+
+    it('tolerates an indented root in non-strict mode', () => {
+      expect(decodeLax('  42')).toBe(42);
+    });
+  });
+
+  describe('quoted key boundaries (§7.4)', () => {
+    it.each([
+      ['a key-value key', '"a"x"b": 1'],
+      ['adjacent quoted segments', '"a""b": 1'],
+      ['quote-space-quote', '"a" "b": 1'],
+      ['trailing characters', '"a"b: 1'],
+      ['a header key', '"a"x"b"[1]: 1'],
+      ['a keyed entry key', 'u[1:]{f}:\n  "a"x"b": 1'],
+      ['a header field name', 'a[1]{"x"y"z"}:\n  1'],
+    ])('rejects characters after the closing quote in %s', (_label, toon) => {
+      expect(() => decode(toon)).toThrow(ToonDecodingError);
+    });
+
+    it('rejects an unterminated quoted key', () => {
+      expect(() => decode('"abc: 1')).toThrow(ToonDecodingError);
+    });
+
+    it('still accepts well-formed quoted keys and field names', () => {
+      expect(decode('"a-b": 1')).toEqual({ 'a-b': 1 });
+      expect(decode('"a\\"b": 1')).toEqual({ 'a"b': 1 });
+      expect(decode('"my-key"[2]: 1,2')).toEqual({ 'my-key': [1, 2] });
+      expect(decode('a[1]{"x-y"}:\n  1')).toEqual({ a: [{ 'x-y': 1 }] });
+      expect(decode('u[1:]{f}:\n  "a-b": 1')).toEqual({ u: { 'a-b': { f: 1 } } });
+    });
+  });
 });

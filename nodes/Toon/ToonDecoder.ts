@@ -174,6 +174,16 @@ export class ToonDecoder {
     const first = this.lines[0];
     const content = first.content;
 
+    // The root scope's content depth is 0 (§1.3), so an indented first line
+    // belongs to no scope. Checked before the fast paths below so that `  []`
+    // and `  42` are rejected just like an indented `  a: 1` (§12, §14.2).
+    if (this.options.strict && this.depthOf(first) !== 0) {
+      throw new ToonDecodingError('Root content must start at depth 0', {
+        lineNumber: first.lineNumber,
+        line: first.content,
+      });
+    }
+
     // The bare token "[]" is an empty root array (§9.1)
     if (content === '[]') {
       this.pos = 1;
@@ -791,20 +801,18 @@ export class ToonDecoder {
     const trimmed = utils.trimSpaces(token);
 
     if (trimmed.startsWith('"')) {
-      if (!trimmed.endsWith('"') || trimmed.length < 2) {
-        throw new ToonDecodingError('Unterminated quoted key', {
+      // A quoted key MUST be a complete quoted token: its closing quote is the
+      // token's last character, and anything after it is an error (§7.4)
+      const decoded = utils.tryUnescapeQuotedToken(trimmed, 'key');
+
+      if (decoded.error !== null) {
+        throw new ToonDecodingError(decoded.error, {
           lineNumber: line.lineNumber,
           line: line.content,
         });
       }
-      const unescaped = utils.tryUnescapeString(trimmed.slice(1, -1));
-      if (unescaped.error !== null) {
-        throw new ToonDecodingError(unescaped.error, {
-          lineNumber: line.lineNumber,
-          line: line.content,
-        });
-      }
-      return unescaped.value as string;
+
+      return decoded.value as string;
     }
 
     return trimmed;
@@ -818,53 +826,19 @@ export class ToonDecoder {
 
     // A token starting with a quote MUST be a complete quoted token (§7.4)
     if (trimmed.startsWith('"')) {
-      const closing = this.findClosingQuote(trimmed);
+      const decoded = utils.tryUnescapeQuotedToken(trimmed, 'string');
 
-      if (closing < 0) {
-        throw new ToonDecodingError('Unterminated quoted string', {
+      if (decoded.error !== null) {
+        throw new ToonDecodingError(decoded.error, {
           lineNumber: line?.lineNumber,
           line: line?.content,
         });
       }
 
-      if (closing !== trimmed.length - 1) {
-        throw new ToonDecodingError('Characters after closing quote', {
-          lineNumber: line?.lineNumber,
-          line: line?.content,
-        });
-      }
-
-      const unescaped = utils.tryUnescapeString(trimmed.slice(1, -1));
-      if (unescaped.error !== null) {
-        throw new ToonDecodingError(unescaped.error, {
-          lineNumber: line?.lineNumber,
-          line: line?.content,
-        });
-      }
-      return unescaped.value as string;
+      return decoded.value as string;
     }
 
     return utils.parseToken(trimmed);
-  }
-
-  /**
-   * Find the index of the quote closing a token that starts with one
-   */
-  private findClosingQuote(token: string): number {
-    let i = 1;
-
-    while (i < token.length) {
-      if (token[i] === '\\') {
-        i += 2;
-        continue;
-      }
-      if (token[i] === '"') {
-        return i;
-      }
-      i++;
-    }
-
-    return -1;
   }
 
   /**
