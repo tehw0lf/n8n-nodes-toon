@@ -169,8 +169,10 @@ jobs:
                   '6. Bump `toonSpecVersion` in `package.json` to `' + upstreamVersion + '`, take a',
                   '   patch bump on our own version, and run `npm install`',
                   '7. Review `DEVELOPMENT.md` — the spec compliance table may need new',
-                  '   rows. The spec version itself is not duplicated there, so it',
-                  '   needs no edit.',
+                  '   rows, annotated *(v' + upstreamVersion + ')* to record which release',
+                  '   introduced the rule. Existing annotations are historical and stay',
+                  '   as they are; the spec version itself is not duplicated there, so',
+                  '   it needs no edit.',
                   '',
                   '### Diff Summary (first 100 lines)',
                   '',
@@ -196,8 +198,11 @@ jobs:
                   '',
                   'The spec version lives only in `package.json`; `DEVELOPMENT.md`',
                   'references that field rather than repeating the number, so it needs',
-                  'no edit. If you find a hard-coded version anywhere else, replace it',
-                  'with a reference instead of updating it.'
+                  'no edit. If you find the *current* spec version hard-coded anywhere',
+                  'else, replace it with a reference instead of updating it. This does',
+                  'not apply to the historical *(vX.Y.Z)* annotations in the',
+                  '`DEVELOPMENT.md` compliance table, which record when a rule was',
+                  'introduced and stay as they are.'
                 ];
 
             const issueBody = [
