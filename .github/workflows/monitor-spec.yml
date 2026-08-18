@@ -166,7 +166,11 @@ jobs:
                   '3. Review and update implementation in `nodes/Toon/` if needed',
                   '4. Update tests to cover any new features or changes',
                   '5. Update `README.md` to reflect the new version',
-                  '6. Update `package.json` if appropriate',
+                  '6. Bump `toonSpecVersion` in `package.json` to `' + upstreamVersion + '`, take a',
+                  '   patch bump on our own version, and run `npm install`',
+                  '7. Review `DEVELOPMENT.md` — the spec compliance table may need new',
+                  '   rows. The spec version itself is not duplicated there, so it',
+                  '   needs no edit.',
                   '',
                   '### Diff Summary (first 100 lines)',
                   '',
@@ -186,8 +190,14 @@ jobs:
                   '',
                   '1. Bump `toonSpecVersion` in `package.json` to `' + upstreamVersion + '`',
                   '2. Bump our own package version (patch only)',
+                  '3. Run `npm install` so `package-lock.json` picks up the new version',
                   '',
-                  '`SPEC.md`, `nodes/Toon/`, and the tests do not need to change.'
+                  '`SPEC.md`, `nodes/Toon/`, and the tests do not need to change.',
+                  '',
+                  'The spec version lives only in `package.json`; `DEVELOPMENT.md`',
+                  'references that field rather than repeating the number, so it needs',
+                  'no edit. If you find a hard-coded version anywhere else, replace it',
+                  'with a reference instead of updating it.'
                 ];
 
             const issueBody = [
