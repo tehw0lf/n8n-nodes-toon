@@ -81,7 +81,9 @@ nodes/Toon/
 
 ## TOON Specification Compliance
 
-Spec version: **3.3.2** — tracked in `package.json` field `toonSpecVersion`.
+Spec version: tracked in `package.json` field `toonSpecVersion` — see that
+file for the current value. It is deliberately not duplicated here, so it
+cannot go stale.
 
 Version annotations like *(v3.0.3)* in the table below mark the release that
 introduced a given rule; they are historical and intentionally not updated.
