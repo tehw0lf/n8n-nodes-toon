@@ -26,7 +26,7 @@ jobs:
       build_main: "run build"
       artifact_path: "dist"
       library_path: "dist"
-      publish_github_release: "true"
+      publish_github_release: true
       npm_audit_omit_dev: true
       npm_audit_severity_threshold: "critical"
       cyclonedx_ignore_npm_errors: true
