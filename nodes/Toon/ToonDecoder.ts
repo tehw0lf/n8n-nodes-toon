@@ -300,21 +300,23 @@ export class ToonDecoder {
   /**
    * Parse an object scope whose content sits at `depth` (§8)
    */
-  private parseObject(depth: number): Record<string, unknown> {
+  private parseObject(depth: number, floor: number = depth): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
       const lineDepth = this.depthOf(line);
 
-      // A shallower line ends this scope
-      if (lineDepth < depth) {
+      // A shallower line ends this scope; `floor` is the depth the scope was
+      // opened at, below the raised depth of a non-strict depth jump (§8)
+      if (lineDepth < floor) {
         break;
       }
 
       // A deeper line whose predecessor did not open a scope belongs to no
-      // scope (§8, §14.2)
-      if (lineDepth > depth) {
+      // scope (§8, §14.2); so does a line between the opener and a raised
+      // content depth, which leaves the scope open
+      if (lineDepth !== depth) {
         if (this.options.strict) {
           throw new ToonDecodingError(
             'Over-indented line: no enclosing scope was opened',
@@ -427,7 +429,7 @@ export class ToonDecoder {
       );
     }
 
-    return this.parseObject(this.scopeDepth(depth + 1));
+    return this.parseObject(this.scopeDepth(depth + 1), depth + 1);
   }
 
   /**
@@ -518,10 +520,23 @@ export class ToonDecoder {
     const fields = header.fields!;
     const leafCount = utils.countLeafFields(fields);
     const rows: Record<string, unknown>[] = [];
+    const floor = rowDepth;
     rowDepth = this.scopeDepth(rowDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
+
+      if (this.depthOf(line) < floor) {
+        break;
+      }
+
+      // Between the opener and a raised row depth (non-strict depth jump):
+      // over-indented, the scope stays open (§8)
+      if (this.depthOf(line) < rowDepth) {
+        this.rejectScalarLine(line, 'Over-indented scalar line in tabular scope');
+        this.pos++;
+        continue;
+      }
 
       if (this.depthOf(line) !== rowDepth) {
         break;
@@ -609,17 +624,18 @@ export class ToonDecoder {
     const leafCount = utils.countLeafFields(fields);
     const obj: Record<string, unknown> = {};
     let count = 0;
+    const floor = entryDepth;
     entryDepth = this.scopeDepth(entryDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
 
       // A keyed scope ends only when the depth decreases (§9.5)
-      if (this.depthOf(line) < entryDepth) {
+      if (this.depthOf(line) < floor) {
         break;
       }
 
-      if (this.depthOf(line) > entryDepth) {
+      if (this.depthOf(line) !== entryDepth) {
         if (this.options.strict) {
           throw new ToonDecodingError('Over-indented line in keyed tabular scope', {
             lineNumber: line.lineNumber,
@@ -668,13 +684,14 @@ export class ToonDecoder {
    */
   private parseListItems(header: utils.ParsedHeader, itemDepth: number): unknown[] {
     const items: unknown[] = [];
+    const floor = itemDepth;
     itemDepth = this.scopeDepth(itemDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
       const lineDepth = this.depthOf(line);
 
-      if (lineDepth < itemDepth) {
+      if (lineDepth < floor) {
         break;
       }
 
@@ -684,7 +701,7 @@ export class ToonDecoder {
         break;
       }
 
-      if (lineDepth > itemDepth) {
+      if (lineDepth !== itemDepth) {
         if (this.options.strict) {
           throw new ToonDecodingError('Over-indented line in list scope', {
             lineNumber: line.lineNumber,

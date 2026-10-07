@@ -809,6 +809,18 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
       expect(decodeLax('xs[1]:\n    - 1')).toEqual({ xs: [1] });
     });
 
+    it('keeps the scope open past a line between the opener and the raised depth', () => {
+      expect(decodeLax('a:\n    b: 1\n  c: 2\n    e: 5')).toEqual({ a: { b: 1, e: 5 } });
+      expect(decodeLax('m[2:]{a}:\n    k: 1\n  j: 2\n    l: 3')).toEqual({
+        m: { k: { a: 1 }, l: { a: 3 } },
+      });
+      expect(decodeLax('xs[1]:\n  - a:\n        b: 1\n      c: 2\n    d: 3')).toEqual({
+        xs: [{ a: { b: 1 }, d: 3 }],
+      });
+      expect(decodeLax('xs[2]:\n    - 1\n  x: 2\n    - 3')).toEqual({ xs: [1, 3] });
+      expect(decodeLax('xs[2]{a}:\n    1\n  x: 2\n    3')).toEqual({ xs: [{ a: 1 }, { a: 3 }] });
+    });
+
     it('keeps the strict-mode depth-jump errors', () => {
       expect(() => decode('a:\n    b: 1')).toThrow(ToonDecodingError);
       expect(() => decode('m[1:]{a}:\n    k: 1')).toThrow(ToonDecodingError);
