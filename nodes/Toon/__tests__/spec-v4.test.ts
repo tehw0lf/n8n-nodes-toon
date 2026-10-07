@@ -652,4 +652,70 @@ describe('TOON v4.1 conformance', () => {
       expect(decode('u[1:]{f}:\n  "a-b": 1')).toEqual({ u: { 'a-b': { f: 1 } } });
     });
   });
+
+  describe('scalar lines in non-strict mode (§5, §5.2, §14.2)', () => {
+    it.each([
+      ['after a root array', '[1]: 1\nextra'],
+      ['indented after a root array', '[1]: 1\n  extra'],
+      ['hyphen line after a root array', '[1]: 1\n- x'],
+      ['after a keyed tabular root', '[1:]{a}:\n  x: 1\nextra'],
+      ['over-indented under a primitive field', 'a: 1\n    junk'],
+      ['after a nested list scope', 'a[1]:\n  - 1\n  junk'],
+      ['over-indented in a list scope', 'a[1]:\n  - 1\n      junk'],
+      ['over-indented hyphen line in a list scope', 'a[1]:\n  - 1\n      - junk'],
+      ['over-indented in a keyed tabular scope', 'a[1:]{x}:\n  k: 1\n      junk'],
+    ])('rejects a scalar line %s in any mode', (_label, toon) => {
+      expect(() => decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decodeLax(toon)).toThrow(ToonDecodingError);
+    });
+
+    it('still ignores non-scalar trailing content after a root array', () => {
+      expect(decodeLax('[1]: 1\nx: 2')).toEqual([1]);
+    });
+
+    it('still skips over-indented key-value lines', () => {
+      expect(decodeLax('a: 1\n    b: 2')).toEqual({ a: 1 });
+    });
+
+    it('still skips over-indented non-scalar lines in list and keyed tabular scopes', () => {
+      expect(decodeLax('a[1]:\n  - 1\n      b: 2')).toEqual({ a: [1] });
+      expect(decodeLax('a[1:]{x}:\n  k: 1\n      b: 2')).toEqual({ a: { k: { x: 1 } } });
+    });
+
+    it('skips a line without a colon at entry depth of a keyed tabular scope (§9.5)', () => {
+      expect(decodeLax('u[2:]{x}:\n  a: 1\n  boom')).toEqual({ u: { a: { x: 1 } } });
+      expect(() => decode('u[2:]{x}:\n  a: 1\n  boom')).toThrow(ToonDecodingError);
+    });
+  });
+
+  describe('v4.1.3 clarifications', () => {
+    it('rejects paired surrogate escapes as well as lone ones (§7.1)', () => {
+      expect(() => decode('"\\ud83d\\ude00"')).toThrow(ToonDecodingError);
+      expect(() => decode('"\\ud83d"')).toThrow(ToonDecodingError);
+    });
+
+    it('quotes a root primitive starting with U+FEFF (§7.2)', () => {
+      expect(encode('\uFEFFx')).toBe('"\uFEFFx"');
+      expect(decode(encode('\uFEFFx'))).toBe('\uFEFFx');
+    });
+
+    it('accepts spaces between a key and its colon (§7.4, §12)', () => {
+      expect(decode('a : 1')).toEqual({ a: 1 });
+    });
+
+    it('trims spaces around field entries in a field list (§12)', () => {
+      expect(decode('[1]{ a , b }:\n  1,2')).toEqual([{ a: 1, b: 2 }]);
+      expect(decode('k[1]{ a , b }:\n  1,2')).toEqual({ k: [{ a: 1, b: 2 }] });
+    });
+
+    it('encodes arrays of arrays and mixed arrays inside a list item in list form (§9.4)', () => {
+      expect(encode([[[1]]])).toBe('[1]:\n  - [1]:\n    - [1]: 1');
+      expect(encode([[1, { a: 1 }]])).toBe('[1]:\n  - [2]:\n    - 1\n    - a: 1');
+    });
+
+    it('strips only a single CR at the end of a line (§12)', () => {
+      expect(decode('a: 1\r\nb: 2')).toEqual({ a: 1, b: 2 });
+      expect(decode('a: 1\r\r\nb: 2')).toEqual({ a: '1\r', b: 2 });
+    });
+  });
 });

@@ -141,6 +141,12 @@ export class ToonEncoder {
       return this.encodeObject(value, 0);
     }
 
+    // A root primitive starting with U+FEFF is quoted, or a decoder would remove
+    // it as a byte-order mark (§7.2, §12)
+    if (typeof value === 'string' && value.startsWith('\uFEFF')) {
+      return [`"${utils.escapeString(value)}"`];
+    }
+
     // Root primitive
     return [this.encodePrimitive(value, this.documentDelimiter)];
   }
