@@ -1,6 +1,6 @@
 /**
  * TOON Encoder - Converts JSON to TOON format
- * Implements TOON Specification v4.1
+ * Implements TOON Specification v4.2
  */
 
 import type { EncoderOptions, Delimiter, FieldEntry } from './types';

@@ -1,6 +1,6 @@
 /**
  * TOON Utilities - Core helper functions for encoding and decoding
- * Implements TOON Specification v4.1
+ * Implements TOON Specification v4.2
  */
 
 import type { Delimiter, FieldEntry } from './types';
@@ -536,6 +536,12 @@ export function parseFieldList(body: string, delimiter: Delimiter): FieldEntry[]
       throw new Error(`Unmatched braces in field list: ${entry}`);
     }
 
+    // Whitespace MUST NOT appear between a field name and its nested field
+    // group (§6)
+    if (/\s$/.test(entry.slice(0, bracePos))) {
+      throw new Error(`Whitespace between field name and nested field group: ${entry}`);
+    }
+
     const name = decodeFieldName(entry.slice(0, bracePos));
     const nested = entry.slice(bracePos + 1, -1);
     return { name, children: parseFieldList(nested, delimiter) };
@@ -697,7 +703,14 @@ export function parseHeader(content: string): ParsedHeader | null {
   const firstColon = findUnquoted(content, ':');
   const firstBracket = findUnquoted(content, '[');
 
-  if (firstBracket < 0 || (firstColon >= 0 && firstColon < firstBracket)) {
+  // A line without an unquoted colon is neither a header nor a key context
+  // (§5.2, §6); once the first unquoted "[" precedes the first unquoted
+  // colon, the line MUST match the header grammar (§5.2 class 3).
+  if (
+    firstColon < 0 ||
+    firstBracket < 0 ||
+    firstColon < firstBracket
+  ) {
     return null;
   }
 
@@ -706,7 +719,7 @@ export function parseHeader(content: string): ParsedHeader | null {
 
   const closing = rest.indexOf(']');
   if (closing < 0) {
-    return null;
+    throw new Error(`Missing closing bracket in header: ${content}`);
   }
 
   const segment = rest.slice(1, closing);
@@ -717,10 +730,6 @@ export function parseHeader(content: string): ParsedHeader | null {
   }
 
   const parsedSegment = parseBracketSegment(segment);
-  if (parsedSegment === null) {
-    return null;
-  }
-
   const { length, delimiter, keyed } = parsedSegment;
 
   // Parse the key, unescaping when quoted (§7.3, §7.4)
@@ -777,23 +786,19 @@ export function parseHeader(content: string): ParsedHeader | null {
 /**
  * Parse the interior of a bracket segment per §6.
  *
- * Returns null when the text is not a bracket segment at all; throws when it
- * is malformed in a way §6 calls out explicitly (leading zeros, misplaced
- * keyed colon, missing length).
+ * Throws when the segment is malformed (non-digit body, leading zeros,
+ * misplaced keyed colon, missing length).
  */
 function parseBracketSegment(
   segment: string,
-): { length: number; delimiter: Delimiter; keyed: boolean } | null {
+): { length: number; delimiter: Delimiter; keyed: boolean } {
   // `[N]`, `[N<delim>]`, `[N:]`, `[N:<delim>]`
   const match = segment.match(/^(\d+)(:)?([\t|])?$/);
 
   if (!match) {
-    // A bracket segment with a digit-led but malformed body is a header error;
-    // anything else (e.g. `[bar]`) is simply not a bracket segment.
-    if (/^\d/.test(segment) || segment === '') {
-      throw new Error(`Malformed bracket segment: [${segment}]`);
-    }
-    return null;
+    // The line is header-shaped (§5.2 class 3), so any body that is not a
+    // valid length segment (`[bar]`, `[-1]`, `[+3]`, `[#2]`) is a header error
+    throw new Error(`Malformed bracket segment: [${segment}]`);
   }
 
   const [, digits, keyedMarker, delimSym] = match;
