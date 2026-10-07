@@ -1,6 +1,6 @@
 /**
  * TOON Decoder - Parses TOON format to JSON
- * Implements TOON Specification v4.1
+ * Implements TOON Specification v4.2
  */
 
 import type { DecoderOptions, FieldEntry, ParsedLine } from './types';
@@ -80,7 +80,11 @@ export class ToonDecoder {
 
       // Blank lines never create or close structure (§12), but a blank
       // falling inside a header span is a strict-mode error, so remember it
-      if (line.trim() === '') {
+      // Blank means spaces only (§12): in strict mode a line holding a tab is
+      // not blank, in non-strict mode spaces and tabs alone still are. Other
+      // whitespace (e.g. NBSP) never makes a line blank.
+      const isBlank = this.options.strict ? line === '' : /^[ \t]*$/.test(line);
+      if (isBlank) {
         blankBefore = true;
         continue;
       }
@@ -185,7 +189,8 @@ export class ToonDecoder {
     }
 
     // The bare token "[]" is an empty root array (§9.1)
-    if (content === '[]') {
+    // (only at depth 0, §5; a lax decoder reaches here with an indented line)
+    if (content === '[]' && this.depthOf(first) === 0) {
       this.pos = 1;
       this.checkNoTrailingContent();
       return [];
@@ -210,7 +215,11 @@ export class ToonDecoder {
 
     // A single non-blank line that is neither a header nor a key-value line
     // decodes as a root primitive (§5)
-    if (this.lines.length === 1 && utils.findUnquoted(content, ':') < 0) {
+    if (
+      this.lines.length === 1 &&
+      this.depthOf(first) === 0 &&
+      utils.findUnquoted(content, ':') < 0
+    ) {
       this.pos = 1;
       return this.parseValueToken(content, first);
     }
@@ -291,21 +300,23 @@ export class ToonDecoder {
   /**
    * Parse an object scope whose content sits at `depth` (§8)
    */
-  private parseObject(depth: number): Record<string, unknown> {
+  private parseObject(depth: number, floor: number = depth): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
       const lineDepth = this.depthOf(line);
 
-      // A shallower line ends this scope
-      if (lineDepth < depth) {
+      // A shallower line ends this scope; `floor` is the depth the scope was
+      // opened at, below the raised depth of a non-strict depth jump (§8)
+      if (lineDepth < floor) {
         break;
       }
 
       // A deeper line whose predecessor did not open a scope belongs to no
-      // scope (§8, §14.2)
-      if (lineDepth > depth) {
+      // scope (§8, §14.2); so does a line between the opener and a raised
+      // content depth, which leaves the scope open
+      if (lineDepth !== depth) {
         if (this.options.strict) {
           throw new ToonDecodingError(
             'Over-indented line: no enclosing scope was opened',
@@ -418,7 +429,24 @@ export class ToonDecoder {
       );
     }
 
-    return this.parseObject(depth + 1);
+    return this.parseObject(this.scopeDepth(depth + 1), depth + 1);
+  }
+
+  /**
+   * Content depth of a scope whose first content line is about to be read.
+   *
+   * Non-strict decoders take the depth of a first line that stands deeper than
+   * the expected content depth as the scope's content depth (§8, §14); strict
+   * decoders always use the expected depth.
+   */
+  private scopeDepth(expected: number): number {
+    if (this.options.strict) {
+      return expected;
+    }
+    const next = this.peek();
+    return next !== null && this.depthOf(next) > expected
+      ? this.depthOf(next)
+      : expected;
   }
 
   /**
@@ -492,9 +520,23 @@ export class ToonDecoder {
     const fields = header.fields!;
     const leafCount = utils.countLeafFields(fields);
     const rows: Record<string, unknown>[] = [];
+    const floor = rowDepth;
+    rowDepth = this.scopeDepth(rowDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
+
+      if (this.depthOf(line) < floor) {
+        break;
+      }
+
+      // Between the opener and a raised row depth (non-strict depth jump):
+      // over-indented, the scope stays open (§8)
+      if (this.depthOf(line) < rowDepth) {
+        this.rejectScalarLine(line, 'Over-indented scalar line in tabular scope');
+        this.pos++;
+        continue;
+      }
 
       if (this.depthOf(line) !== rowDepth) {
         break;
@@ -582,16 +624,18 @@ export class ToonDecoder {
     const leafCount = utils.countLeafFields(fields);
     const obj: Record<string, unknown> = {};
     let count = 0;
+    const floor = entryDepth;
+    entryDepth = this.scopeDepth(entryDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
 
       // A keyed scope ends only when the depth decreases (§9.5)
-      if (this.depthOf(line) < entryDepth) {
+      if (this.depthOf(line) < floor) {
         break;
       }
 
-      if (this.depthOf(line) > entryDepth) {
+      if (this.depthOf(line) !== entryDepth) {
         if (this.options.strict) {
           throw new ToonDecodingError('Over-indented line in keyed tabular scope', {
             lineNumber: line.lineNumber,
@@ -640,12 +684,14 @@ export class ToonDecoder {
    */
   private parseListItems(header: utils.ParsedHeader, itemDepth: number): unknown[] {
     const items: unknown[] = [];
+    const floor = itemDepth;
+    itemDepth = this.scopeDepth(itemDepth);
 
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
       const lineDepth = this.depthOf(line);
 
-      if (lineDepth < itemDepth) {
+      if (lineDepth < floor) {
         break;
       }
 
@@ -655,7 +701,7 @@ export class ToonDecoder {
         break;
       }
 
-      if (lineDepth > itemDepth) {
+      if (lineDepth !== itemDepth) {
         if (this.options.strict) {
           throw new ToonDecodingError('Over-indented line in list scope', {
             lineNumber: line.lineNumber,
@@ -779,7 +825,9 @@ export class ToonDecoder {
     while (this.pos < this.lines.length) {
       const line = this.lines[this.pos];
 
-      if (this.depthOf(line) !== fieldDepth || this.isListItemLine(line)) {
+      // A hyphen marks a list item only at item depth; at a list-item
+      // object's field depth the line is a key-value line (§5.2, §10)
+      if (this.depthOf(line) !== fieldDepth) {
         break;
       }
 

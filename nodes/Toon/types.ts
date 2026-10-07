@@ -1,6 +1,6 @@
 /**
  * TOON (Token-Oriented Object Notation) Type Definitions
- * Spec version: 4.1
+ * Spec version: 4.2
  */
 
 /**

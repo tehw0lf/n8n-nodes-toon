@@ -318,11 +318,11 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 - **n8n version:** 0.200.0 or later
 - **Node.js:** 18.x or later
-- **TOON Specification:** v4.1
+- **TOON Specification:** v4.2
 
 ## Specification Compliance
 
-This node implements **TOON Specification v4.1** in full: every normative requirement of Sections 1–16 for encoders and decoders, using the default options. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
+This node implements **TOON Specification v4.2** in full: every normative requirement of Sections 1–16 for encoders and decoders, using the default options. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
 
 ### Implemented Features
 
@@ -342,7 +342,7 @@ This node implements **TOON Specification v4.1** in full: every normative requir
 
 ### Non-Spec Extensions
 
-⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.1 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
+⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.2 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
 
 - **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
@@ -495,7 +495,7 @@ See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml)
 
 ## Resources
 
-- **TOON Specification v4.1:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
+- **TOON Specification v4.2:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
 - **n8n Documentation:** https://docs.n8n.io/
 - **Community Nodes Guide:** https://docs.n8n.io/integrations/community-nodes/
 - **GitHub Repository:** https://github.com/tehw0lf/n8n-nodes-toon
@@ -515,4 +515,4 @@ Contributions are welcome! Please open an issue or pull request on GitHub.
 
 ---
 
-**Note:** This node implements the [TOON Specification v4.1](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
+**Note:** This node implements the [TOON Specification v4.2](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.

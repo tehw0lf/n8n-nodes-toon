@@ -622,8 +622,8 @@ describe('TOON v4.1 conformance', () => {
       expect(decode(toon)).toEqual(expected);
     });
 
-    it('tolerates an indented root in non-strict mode', () => {
-      expect(decodeLax('  42')).toBe(42);
+    it('rejects an indented root primitive in non-strict mode (§5, v4.2)', () => {
+      expect(() => decodeLax('  42')).toThrow(ToonDecodingError);
     });
   });
 
@@ -716,6 +716,140 @@ describe('TOON v4.1 conformance', () => {
     it('strips only a single CR at the end of a line (§12)', () => {
       expect(decode('a: 1\r\nb: 2')).toEqual({ a: 1, b: 2 });
       expect(decode('a: 1\r\r\nb: 2')).toEqual({ a: '1\r', b: 2 });
+    });
+  });
+});
+
+describe('TOON v4.2 conformance (release v4.3.0)', () => {
+  describe('hyphen at a list-item object field depth (§5.2, §10)', () => {
+    const toon = 'xs[1]:\n  - a: 1\n    - b: 2';
+    const expected = { xs: [{ a: 1, '- b': 2 }] };
+
+    it('decodes it as a key-value line in strict mode', () => {
+      expect(decode(toon)).toEqual(expected);
+    });
+
+    it('decodes it as a key-value line in non-strict mode', () => {
+      expect(decodeLax(toon)).toEqual(expected);
+    });
+  });
+
+  describe('header-shaped lines (§5.2 class 3, §6, §14.2)', () => {
+    it.each([
+      'a[1:',
+      'x: 1\na[1:',
+      'xs[1]:\n  - a[1:',
+      'foo[bar]: 10',
+      'items[-1]: a,b,c',
+      'x[+3]: a,b,c',
+      'xs[#2]: a,b',
+      'xs[1]:\n  - foo[bar]: 1',
+      'items[1]{a,b {c}}:\n  1,2',
+    ])('is a strict-mode error: %j', (toon) => {
+      expect(() => decode(toon)).toThrow(ToonDecodingError);
+    });
+
+    it('falls through to a key-value line in non-strict mode', () => {
+      expect(decodeLax('a[1:')).toEqual({ 'a[1': {} });
+      expect(decodeLax('foo[bar]: 10')).toEqual({ 'foo[bar]': 10 });
+    });
+
+    it('treats a line without an unquoted colon as a scalar, never a header (§6)', () => {
+      expect(decode('items[2]')).toBe('items[2]');
+      expect(decode('xs[1]:\n  - [2]')).toEqual({ xs: ['[2]'] });
+    });
+
+    it('still rejects a colon-less scalar line next to other content', () => {
+      expect(() => decode('x: 1\nitems[2]')).toThrow(ToonDecodingError);
+    });
+
+    it('still treats a colon before the first bracket as a key-value line', () => {
+      expect(decode('a:b[2]: x')).toEqual({ a: 'b[2]: x' });
+    });
+  });
+
+  describe('root forms stand at depth 0 (§5)', () => {
+    it.each(['  []', '  hello'])('rejects %j in non-strict mode', (toon) => {
+      expect(() => decodeLax(toon)).toThrow(ToonDecodingError);
+    });
+  });
+
+  describe('blank lines are spaces only (§12)', () => {
+    it.each(['a: 1\n\t\nb: 2', 'a: 1\n \t \nb: 2'])(
+      'a line containing a tab is not blank in strict mode: %j',
+      (toon) => {
+        expect(() => decode(toon)).toThrow(ToonDecodingError);
+      },
+    );
+
+    it('treats a line of spaces and tabs as blank in non-strict mode', () => {
+      expect(decodeLax('a: 1\n\t\nb: 2')).toEqual({ a: 1, b: 2 });
+    });
+
+    it('never treats a line containing NBSP as blank', () => {
+      expect(() => decode('a: 1\n\u00a0\nb: 2')).toThrow(ToonDecodingError);
+      expect(() => decodeLax('a: 1\n\u00a0\nb: 2')).toThrow(ToonDecodingError);
+    });
+  });
+
+  describe('non-strict depth-jump leniency (§8, §14)', () => {
+    it('takes the first line depth as the object scope depth', () => {
+      expect(decodeLax('a:\n      b: 1\n    c: 2')).toEqual({ a: { b: 1 } });
+    });
+
+    it('applies to keyed tabular scopes', () => {
+      expect(decodeLax('m[1:]{a}:\n    k: 1')).toEqual({ m: { k: { a: 1 } } });
+    });
+
+    it('applies to tabular rows', () => {
+      expect(decodeLax('xs[1]{a}:\n    1')).toEqual({ xs: [{ a: 1 }] });
+    });
+
+    it('applies to list items', () => {
+      expect(decodeLax('xs[1]:\n    - 1')).toEqual({ xs: [1] });
+    });
+
+    it('keeps the scope open past a line between the opener and the raised depth', () => {
+      expect(decodeLax('a:\n    b: 1\n  c: 2\n    e: 5')).toEqual({ a: { b: 1, e: 5 } });
+      expect(decodeLax('m[2:]{a}:\n    k: 1\n  j: 2\n    l: 3')).toEqual({
+        m: { k: { a: 1 }, l: { a: 3 } },
+      });
+      expect(decodeLax('xs[1]:\n  - a:\n        b: 1\n      c: 2\n    d: 3')).toEqual({
+        xs: [{ a: { b: 1 }, d: 3 }],
+      });
+      expect(decodeLax('xs[2]:\n    - 1\n  x: 2\n    - 3')).toEqual({ xs: [1, 3] });
+      expect(decodeLax('xs[2]{a}:\n    1\n  x: 2\n    3')).toEqual({ xs: [{ a: 1 }, { a: 3 }] });
+    });
+
+    it('keeps the strict-mode depth-jump errors', () => {
+      expect(() => decode('a:\n    b: 1')).toThrow(ToonDecodingError);
+      expect(() => decode('m[1:]{a}:\n    k: 1')).toThrow(ToonDecodingError);
+      expect(() => decode('xs[1]{a}:\n    1')).toThrow(ToonDecodingError);
+      expect(() => decode('xs[1]:\n    - 1')).toThrow(ToonDecodingError);
+    });
+  });
+
+  describe('already compliant behaviour (regression pins)', () => {
+    it('decodes the empty key', () => {
+      expect(decode(': 1')).toEqual({ '': 1 });
+    });
+
+    it('rejects an empty field entry and a nameless nested group (§6)', () => {
+      expect(() => decode('[1]{a,}:\n  1')).toThrow(ToonDecodingError);
+      expect(() => decode('[1]{a,{b}}:\n  1')).toThrow(ToonDecodingError);
+    });
+
+    it('treats a quoted colon or bracket as quoted anywhere in a line (§5.2)', () => {
+      expect(decode('"a:b"[2]: 1,2')).toEqual({ 'a:b': [1, 2] });
+    });
+
+    it('encodes numbers with the fewest round-trip digits (§2)', () => {
+      expect(encode(0.1 + 0.2)).toBe('0.30000000000000004');
+      expect(encode(1e21)).toBe('1e+21');
+      expect(encode(1e-7)).toBe('1e-7');
+      for (const n of [5e-324, 1.7976931348623157e308, 1e21, 1e-7]) {
+        expect(decode(encode(n))).toBe(n);
+      }
     });
   });
 });

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v4.1** (see `SPEC.md`) with **zero external production dependencies**. Archived copies of earlier spec revisions are kept alongside it as `SPEC-v*-archived.md`.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v4.2** (see `SPEC.md`) with **zero external production dependencies**. Archived copies of earlier spec revisions are kept alongside it as `SPEC-v*-archived.md`.
 
 ## Development Setup
 
@@ -111,6 +111,13 @@ introduced a given rule; they are historical and intentionally not updated.
 | §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `parseArray`, `parseTabularArray` | ✅ |
 | §14 | Strict mode: invalid array header (non-whitespace between `]` and `{`/`:`) *(v3.0.3)* | `ToonDecoder.isInvalidArrayHeader` | ✅ |
 | §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3)* | `ToonDecoder.rejectScalarLine` | ✅ |
+| §5.2 | A hyphen marks a list item only at item depth; at a list-item object's field depth the line is a key-value line *(v4.3.0)* | `ToonDecoder.parseListItemRestFields` | ✅ |
+| §5.2, §6, §14.2 | A line whose first unquoted `[` precedes its first unquoted colon must match the header grammar, otherwise it is a header syntax error (strict) or a key-value line (non-strict) *(v4.3.0)* | `ToonUtils.parseHeader` | ✅ |
+| §6 | A line without an unquoted colon is never a header *(v4.3.0)* | `ToonUtils.parseHeader` | ✅ |
+| §6, §12 | No whitespace between a field name and its nested field group *(v4.3.0)* | `ToonUtils.parseFieldList` | ✅ |
+| §5 | Root `[]` and root primitive must stand at depth 0 in any mode *(v4.3.0)* | `ToonDecoder.parseRoot` | ✅ |
+| §12 | Blank lines are spaces only: a tab makes a line non-blank in strict mode, NBSP never blanks a line *(v4.3.0)* | `ToonDecoder.parseLines` | ✅ |
+| §8, §14 | Non-strict depth-jump leniency: the first line's depth becomes the scope's content depth *(v4.3.0)* | `ToonDecoder.scopeDepth` | ✅ |
 
 ## Testing
 
