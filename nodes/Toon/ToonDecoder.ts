@@ -247,8 +247,26 @@ export class ToonDecoder {
         line: next.content,
       });
     }
-    // Non-strict decoders MAY ignore it (§5)
+    // Non-strict decoders MAY ignore it, except scalar lines, which are an
+    // error in any mode (§5, §5.2)
+    for (let i = this.pos; i < this.lines.length; i++) {
+      this.rejectScalarLine(this.lines[i], 'Scalar line after completed root form');
+    }
     this.pos = this.lines.length;
+  }
+
+  /**
+   * A scalar line has no unquoted colon and is therefore neither a header nor
+   * a key-value line; outside a root primitive it is an error in strict and
+   * non-strict mode alike (§5.2, §14.2)
+   */
+  private rejectScalarLine(line: ParsedLine, message: string): void {
+    if (utils.findUnquoted(line.content, ':') < 0) {
+      throw new ToonDecodingError(message, {
+        lineNumber: line.lineNumber,
+        line: line.content,
+      });
+    }
   }
 
   /**
@@ -294,6 +312,7 @@ export class ToonDecoder {
             { lineNumber: line.lineNumber, line: line.content },
           );
         }
+        this.rejectScalarLine(line, 'Over-indented scalar line');
         this.pos++;
         continue;
       }
@@ -579,6 +598,7 @@ export class ToonDecoder {
             line: line.content,
           });
         }
+        this.rejectScalarLine(line, 'Over-indented scalar line in keyed tabular scope');
         this.pos++;
         continue;
       }
@@ -592,6 +612,7 @@ export class ToonDecoder {
             line: line.content,
           });
         }
+        this.rejectScalarLine(line, 'Scalar line at entry depth in keyed tabular scope');
         this.pos++;
         continue;
       }
@@ -641,6 +662,9 @@ export class ToonDecoder {
             lineNumber: line.lineNumber,
             line: line.content,
           });
+        }
+        if (!this.isListItemLine(line)) {
+          this.rejectScalarLine(line, 'Over-indented scalar line in list scope');
         }
         this.pos++;
         continue;
