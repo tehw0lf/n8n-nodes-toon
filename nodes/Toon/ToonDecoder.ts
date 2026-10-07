@@ -612,7 +612,6 @@ export class ToonDecoder {
             line: line.content,
           });
         }
-        this.rejectScalarLine(line, 'Scalar line at entry depth in keyed tabular scope');
         this.pos++;
         continue;
       }
@@ -663,9 +662,7 @@ export class ToonDecoder {
             line: line.content,
           });
         }
-        if (!this.isListItemLine(line)) {
-          this.rejectScalarLine(line, 'Over-indented scalar line in list scope');
-        }
+        this.rejectScalarLine(line, 'Over-indented scalar line in list scope');
         this.pos++;
         continue;
       }

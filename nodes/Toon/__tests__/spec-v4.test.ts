@@ -662,7 +662,7 @@ describe('TOON v4.1 conformance', () => {
       ['over-indented under a primitive field', 'a: 1\n    junk'],
       ['after a nested list scope', 'a[1]:\n  - 1\n  junk'],
       ['over-indented in a list scope', 'a[1]:\n  - 1\n      junk'],
-      ['at entry depth in a keyed tabular scope', 'a[1:]{x}:\n  k: 1\n  junk'],
+      ['over-indented hyphen line in a list scope', 'a[1]:\n  - 1\n      - junk'],
       ['over-indented in a keyed tabular scope', 'a[1:]{x}:\n  k: 1\n      junk'],
     ])('rejects a scalar line %s in any mode', (_label, toon) => {
       expect(() => decode(toon)).toThrow(ToonDecodingError);
@@ -675,6 +675,16 @@ describe('TOON v4.1 conformance', () => {
 
     it('still skips over-indented key-value lines', () => {
       expect(decodeLax('a: 1\n    b: 2')).toEqual({ a: 1 });
+    });
+
+    it('still skips over-indented non-scalar lines in list and keyed tabular scopes', () => {
+      expect(decodeLax('a[1]:\n  - 1\n      b: 2')).toEqual({ a: [1] });
+      expect(decodeLax('a[1:]{x}:\n  k: 1\n      b: 2')).toEqual({ a: { k: { x: 1 } } });
+    });
+
+    it('skips a line without a colon at entry depth of a keyed tabular scope (§9.5)', () => {
+      expect(decodeLax('u[2:]{x}:\n  a: 1\n  boom')).toEqual({ u: { a: { x: 1 } } });
+      expect(() => decode('u[2:]{x}:\n  a: 1\n  boom')).toThrow(ToonDecodingError);
     });
   });
 
@@ -698,8 +708,9 @@ describe('TOON v4.1 conformance', () => {
       expect(decode('k[1]{ a , b }:\n  1,2')).toEqual({ k: [{ a: 1, b: 2 }] });
     });
 
-    it('encodes arrays of arrays inside a list item in list form (§9.2)', () => {
-      expect(encode([[{ x: 1 }]])).toBe('[1]:\n  - [1]:\n    - x: 1');
+    it('encodes arrays of arrays and mixed arrays inside a list item in list form (§9.4)', () => {
+      expect(encode([[[1]]])).toBe('[1]:\n  - [1]:\n    - [1]: 1');
+      expect(encode([[1, { a: 1 }]])).toBe('[1]:\n  - [2]:\n    - 1\n    - a: 1');
     });
 
     it('strips only a single CR at the end of a line (§12)', () => {

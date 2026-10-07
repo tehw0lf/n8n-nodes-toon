@@ -110,7 +110,7 @@ introduced a given rule; they are historical and intentionally not updated.
 | §13.4 | Path expansion (safe mode) | `ToonDecoder.expandPaths` | ✅ |
 | §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `parseArray`, `parseTabularArray` | ✅ |
 | §14 | Strict mode: invalid array header (non-whitespace between `]` and `{`/`:`) *(v3.0.3)* | `ToonDecoder.isInvalidArrayHeader` | ✅ |
-| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too *(v4.1.3)* | `ToonDecoder.rejectScalarLine` | ✅ |
+| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3)* | `ToonDecoder.rejectScalarLine` | ✅ |
 
 ## Testing
 
