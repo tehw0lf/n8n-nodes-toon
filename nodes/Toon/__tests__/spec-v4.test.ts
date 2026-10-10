@@ -821,6 +821,26 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
       expect(decodeLax('xs[2]{a}:\n    1\n  x: 2\n    3')).toEqual({ xs: [{ a: 1 }, { a: 3 }] });
     });
 
+    it('skips an over-indented line inside a list-item object and keeps its later fields (§8)', () => {
+      expect(decodeLax('xs[1]:\n  - a: 1\n      c: 2\n    d: 3')).toEqual({
+        xs: [{ a: 1, d: 3 }],
+      });
+      expect(decodeLax('xs[1]:\n  - k[1]: x\n      c: 2\n    d: 3')).toEqual({
+        xs: [{ k: ['x'], d: 3 }],
+      });
+      expect(decodeLax('xs[2]:\n  - a: 1\n      c: 2\n    d: 3\n  - e: 4')).toEqual({
+        xs: [{ a: 1, d: 3 }, { e: 4 }],
+      });
+    });
+
+    it('still rejects an over-indented scalar line inside a list-item object', () => {
+      expect(() => decodeLax('xs[1]:\n  - a: 1\n      c\n    d: 3')).toThrow(ToonDecodingError);
+    });
+
+    it('keeps the strict error for an over-indented line inside a list-item object', () => {
+      expect(() => decode('xs[1]:\n  - a: 1\n      c: 2\n    d: 3')).toThrow(ToonDecodingError);
+    });
+
     it('keeps the strict-mode depth-jump errors', () => {
       expect(() => decode('a:\n    b: 1')).toThrow(ToonDecodingError);
       expect(() => decode('m[1:]{a}:\n    k: 1')).toThrow(ToonDecodingError);
