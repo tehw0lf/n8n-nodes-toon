@@ -827,8 +827,19 @@ export class ToonDecoder {
 
       // A hyphen marks a list item only at item depth; at a list-item
       // object's field depth the line is a key-value line (§5.2, §10)
-      if (this.depthOf(line) !== fieldDepth) {
+      const lineDepth = this.depthOf(line);
+      if (lineDepth < fieldDepth) {
         break;
+      }
+      if (lineDepth > fieldDepth) {
+        // Strict mode leaves the line to the list scope, which rejects it
+        // (§14.2); non-strict decoders skip it, except scalar lines (§8)
+        if (this.options.strict) {
+          break;
+        }
+        this.rejectScalarLine(line, 'Over-indented scalar line');
+        this.pos++;
+        continue;
       }
 
       // These fields continue the enclosing array's header span (§12)
