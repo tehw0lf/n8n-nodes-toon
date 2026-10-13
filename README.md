@@ -157,6 +157,10 @@ When **Include Token Metrics** is enabled for JSON→TOON conversion, the output
 - **saved**: Number of tokens saved
 - **reduction**: Reduction ratio (0.5285 = 52.85% reduction)
 
+### Error Output (Continue On Fail)
+
+When **Continue On Fail** is enabled and an item fails, the item is emitted with all fields of its input item plus `error` (the error message) and `itemIndex`. Input fields named `error` or `itemIndex` are overwritten.
+
 ## Usage Examples
 
 ### Example 1: LLM Context Preparation
