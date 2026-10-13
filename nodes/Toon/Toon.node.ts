@@ -265,6 +265,7 @@ export class Toon implements INodeType {
         if (this.continueOnFail()) {
           returnData.push({
             json: {
+              ...(items[itemIndex].json as IDataObject),
               error: error.message,
               itemIndex,
             },
