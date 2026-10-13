@@ -333,12 +333,12 @@ describe('TOON v4.1 conformance', () => {
       expect(decodeLax('tags[5]: a,b,c')).toEqual({ tags: ['a', 'b', 'c'] });
     });
 
-    it('omits leaf fields with no remaining cell on a narrow row', () => {
-      expect(decodeLax('a[1]{x,y}:\n  1')).toEqual({ a: [{ x: 1 }] });
+    it('rejects a narrow row in every mode (§9.3, §14.1)', () => {
+      expect(() => decodeLax('a[1]{x,y}:\n  1')).toThrow(ToonDecodingError);
     });
 
-    it('ignores surplus cells on a wide row', () => {
-      expect(decodeLax('a[1]{x}:\n  1,2')).toEqual({ a: [{ x: 1 }] });
+    it('rejects a wide row in every mode (§9.3, §14.1)', () => {
+      expect(() => decodeLax('a[1]{x}:\n  1,2')).toThrow(ToonDecodingError);
     });
   });
 
@@ -669,21 +669,21 @@ describe('TOON v4.1 conformance', () => {
       expect(() => decodeLax(toon)).toThrow(ToonDecodingError);
     });
 
-    it('still ignores non-scalar trailing content after a root array', () => {
-      expect(decodeLax('[1]: 1\nx: 2')).toEqual([1]);
+    it('rejects non-scalar trailing content after a root array in every mode (§5, §14.2)', () => {
+      expect(() => decodeLax('[1]: 1\nx: 2')).toThrow(ToonDecodingError);
     });
 
-    it('still skips over-indented key-value lines', () => {
-      expect(decodeLax('a: 1\n    b: 2')).toEqual({ a: 1 });
+    it('rejects over-indented key-value lines in every mode (§8, §14.2)', () => {
+      expect(() => decodeLax('a: 1\n    b: 2')).toThrow(ToonDecodingError);
     });
 
-    it('still skips over-indented non-scalar lines in list and keyed tabular scopes', () => {
-      expect(decodeLax('a[1]:\n  - 1\n      b: 2')).toEqual({ a: [1] });
-      expect(decodeLax('a[1:]{x}:\n  k: 1\n      b: 2')).toEqual({ a: { k: { x: 1 } } });
+    it('rejects over-indented non-scalar lines in list and keyed tabular scopes in every mode', () => {
+      expect(() => decodeLax('a[1]:\n  - 1\n      b: 2')).toThrow(ToonDecodingError);
+      expect(() => decodeLax('a[1:]{x}:\n  k: 1\n      b: 2')).toThrow(ToonDecodingError);
     });
 
-    it('skips a line without a colon at entry depth of a keyed tabular scope (§9.5)', () => {
-      expect(decodeLax('u[2:]{x}:\n  a: 1\n  boom')).toEqual({ u: { a: { x: 1 } } });
+    it('rejects a line without a colon at entry depth of a keyed tabular scope in every mode (§9.5)', () => {
+      expect(() => decodeLax('u[2:]{x}:\n  a: 1\n  boom')).toThrow(ToonDecodingError);
       expect(() => decode('u[2:]{x}:\n  a: 1\n  boom')).toThrow(ToonDecodingError);
     });
   });
@@ -749,9 +749,9 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
       expect(() => decode(toon)).toThrow(ToonDecodingError);
     });
 
-    it('falls through to a key-value line in non-strict mode', () => {
-      expect(decodeLax('a[1:')).toEqual({ 'a[1': {} });
-      expect(decodeLax('foo[bar]: 10')).toEqual({ 'foo[bar]': 10 });
+    it('is an error in non-strict mode as well (§14.2)', () => {
+      expect(() => decodeLax('a[1:')).toThrow(ToonDecodingError);
+      expect(() => decodeLax('foo[bar]: 10')).toThrow(ToonDecodingError);
     });
 
     it('treats a line without an unquoted colon as a scalar, never a header (§6)', () => {
@@ -793,8 +793,9 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
   });
 
   describe('non-strict depth-jump leniency (§8, §14)', () => {
-    it('takes the first line depth as the object scope depth', () => {
-      expect(decodeLax('a:\n      b: 1\n    c: 2')).toEqual({ a: { b: 1 } });
+    it('takes the first line depth as the object scope depth, and rejects a shallower line (§14.4)', () => {
+      expect(decodeLax('a:\n      b: 1')).toEqual({ a: { b: 1 } });
+      expect(() => decodeLax('a:\n      b: 1\n    c: 2')).toThrow(ToonDecodingError);
     });
 
     it('applies to keyed tabular scopes', () => {
@@ -809,28 +810,26 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
       expect(decodeLax('xs[1]:\n    - 1')).toEqual({ xs: [1] });
     });
 
-    it('keeps the scope open past a line between the opener and the raised depth', () => {
-      expect(decodeLax('a:\n    b: 1\n  c: 2\n    e: 5')).toEqual({ a: { b: 1, e: 5 } });
-      expect(decodeLax('m[2:]{a}:\n    k: 1\n  j: 2\n    l: 3')).toEqual({
-        m: { k: { a: 1 }, l: { a: 3 } },
-      });
-      expect(decodeLax('xs[1]:\n  - a:\n        b: 1\n      c: 2\n    d: 3')).toEqual({
-        xs: [{ a: { b: 1 }, d: 3 }],
-      });
-      expect(decodeLax('xs[2]:\n    - 1\n  x: 2\n    - 3')).toEqual({ xs: [1, 3] });
-      expect(decodeLax('xs[2]{a}:\n    1\n  x: 2\n    3')).toEqual({ xs: [{ a: 1 }, { a: 3 }] });
+    it('rejects a line between the opener and the raised depth (§8, §14.4)', () => {
+      expect(() => decodeLax('a:\n    b: 1\n  c: 2\n    e: 5')).toThrow(ToonDecodingError);
+      expect(() => decodeLax('m[2:]{a}:\n    k: 1\n  j: 2\n    l: 3')).toThrow(ToonDecodingError);
+      expect(() =>
+        decodeLax('xs[1]:\n  - a:\n        b: 1\n      c: 2\n    d: 3'),
+      ).toThrow(ToonDecodingError);
+      expect(() => decodeLax('xs[2]:\n    - 1\n  x: 2\n    - 3')).toThrow(ToonDecodingError);
+      expect(() => decodeLax('xs[2]{a}:\n    1\n  x: 2\n    3')).toThrow(ToonDecodingError);
     });
 
-    it('skips an over-indented line inside a list-item object and keeps its later fields (§8)', () => {
-      expect(decodeLax('xs[1]:\n  - a: 1\n      c: 2\n    d: 3')).toEqual({
-        xs: [{ a: 1, d: 3 }],
-      });
-      expect(decodeLax('xs[1]:\n  - k[1]: x\n      c: 2\n    d: 3')).toEqual({
-        xs: [{ k: ['x'], d: 3 }],
-      });
-      expect(decodeLax('xs[2]:\n  - a: 1\n      c: 2\n    d: 3\n  - e: 4')).toEqual({
-        xs: [{ a: 1, d: 3 }, { e: 4 }],
-      });
+    it('rejects an over-indented line inside a list-item object in every mode (§8, §14.2)', () => {
+      expect(() => decodeLax('xs[1]:\n  - a: 1\n      c: 2\n    d: 3')).toThrow(
+        ToonDecodingError,
+      );
+      expect(() => decodeLax('xs[1]:\n  - k[1]: x\n      c: 2\n    d: 3')).toThrow(
+        ToonDecodingError,
+      );
+      expect(() => decodeLax('xs[2]:\n  - a: 1\n      c: 2\n    d: 3\n  - e: 4')).toThrow(
+        ToonDecodingError,
+      );
     });
 
     it('still rejects an over-indented scalar line inside a list-item object', () => {
@@ -869,6 +868,110 @@ describe('TOON v4.2 conformance (release v4.3.0)', () => {
       expect(encode(1e-7)).toBe('1e-7');
       for (const n of [5e-324, 1.7976931348623157e308, 1e21, 1e-7]) {
         expect(decode(encode(n))).toBe(n);
+      }
+    });
+  });
+});
+
+describe('TOON v4.4 conformance (release v4.4.0)', () => {
+  describe('every §14.1-§14.3 condition is an error in both modes (§14, §14.2)', () => {
+    it.each([
+      ['an indented first line (§8)', '  a: 1'],
+      ['trailing content after a root array (§5)', '[2]: a,b\nx: 1'],
+      ['a keyless header in object-field position (§6)', 'x:\n  [2]: a,b'],
+      ['a keyless fields-bearing header as a list item (§6)', 'xs[1]:\n  - [1]{a}:\n    1'],
+      ['a malformed bracket segment (§6)', 'foo[bar]: 10'],
+      ['an unterminated bracket segment (§6)', 'a[1:'],
+      ['a wide row (§9.3)', 'items[2]{a,b}:\n  1\n  1,2,3'],
+      ['a colon-less line at entry depth (§9.5)', 'm[1:]{a}:\n  k: 1\n  oops'],
+      ['an over-indented object line (§8)', 'a:\n  b: 1\n    c: 2'],
+      ['an over-indented list-item field (§8)', 'xs[1]:\n  - a: 1\n      b: 2'],
+      ['a line shallower than the raised depth (§14.4)', 'a:\n      b: 1\n    c: 2'],
+      ['a field-list delimiter mismatch (§6)', 'items[1|]{a,b}:\n  1,2'],
+    ])('rejects %s', (_label, toon) => {
+      expect(() => decode(toon)).toThrow(ToonDecodingError);
+      expect(() => decodeLax(toon)).toThrow(ToonDecodingError);
+    });
+  });
+
+  describe('whitespace is SP and HTAB only (§1.2, §6)', () => {
+    it.each([
+      ['NBSP at the end of a key', 'n\u00a0[1]: y', { 'n\u00a0': ['y'] }],
+      ['inner whitespace in a key', 'my key[2]: a,b', { 'my key': ['a', 'b'] }],
+      [
+        'a quoted key containing brackets',
+        '"has \\"[2]\\" in it"[3]: 3,4,5',
+        { 'has "[2]" in it': [3, 4, 5] },
+      ],
+    ])('accepts %s', (_label, toon, expected) => {
+      expect(decode(toon)).toEqual(expected);
+      expect(decodeLax(toon)).toEqual(expected);
+    });
+
+    it.each(['t\t[2]: a,b', 'n [1]: y'])(
+      'still rejects whitespace directly before the bracket: %j',
+      (toon) => {
+        expect(() => decode(toon)).toThrow(ToonDecodingError);
+        expect(() => decodeLax(toon)).toThrow(ToonDecodingError);
+      },
+    );
+  });
+
+  describe('list-item marker (§5.2, App. B.5)', () => {
+    it('accepts several spaces after the hyphen', () => {
+      const toon = 'xs[2]:\n  -  x\n  -   y[2]: 1,2';
+      expect(decode(toon)).toEqual({ xs: ['x', { y: [1, 2] }] });
+      expect(decodeLax(toon)).toEqual({ xs: ['x', { y: [1, 2] }] });
+    });
+  });
+
+  describe('non-strict recoveries (§14.4)', () => {
+    it('resolves a duplicate field name by last-write-wins (recovery 2)', () => {
+      expect(decodeLax('items[1]{a,a}:\n  1,2')).toEqual({ items: [{ a: 2 }] });
+      expect(() => decode('items[1]{a,a}:\n  1,2')).toThrow(ToonDecodingError);
+    });
+
+    it('keeps the first position of a duplicated key (recovery 2)', () => {
+      expect(Object.keys(decodeLax('a: 1\nb: 2\na: 3') as object)).toEqual(['a', 'b']);
+      expect(decodeLax('a: 1\nb: 2\na: 3')).toEqual({ a: 3, b: 2 });
+    });
+
+    it('counts a tab in the indentation as one level (recovery 3)', () => {
+      expect(decodeLax('a:\n\tb: 1')).toEqual({ a: { b: 1 } });
+      expect(() => decode('a:\n\tb: 1')).toThrow(ToonDecodingError);
+    });
+
+    it('does not treat a tab-indented "#" line as a comment (recovery 3)', () => {
+      expect(decodeLax('items[3]{id}:\n  1\n\t#x\n  2')).toEqual({
+        items: [{ id: 1 }, { id: '#x' }, { id: 2 }],
+      });
+    });
+
+    it('ignores blank lines inside a header span (recovery 4)', () => {
+      expect(decodeLax('xs[2]:\n  - 1\n\n  - 2')).toEqual({ xs: [1, 2] });
+    });
+
+    it('ignores count mismatches (recovery 1)', () => {
+      expect(decodeLax('tags[5]: a,b')).toEqual({ tags: ['a', 'b'] });
+    });
+
+    it('takes the first line depth as the scope depth (recovery 5)', () => {
+      expect(decodeLax('a:\n    b: 1')).toEqual({ a: { b: 1 } });
+    });
+  });
+
+  describe('already compliant behaviour (regression pins)', () => {
+    it('keeps a leading-zero number a string (§4)', () => {
+      expect(decode('a: 05')).toEqual({ a: '05' });
+    });
+
+    it('does not let a combining mark alter a delimiter (§1.2)', () => {
+      expect(decode('xs[2]: a,\u0301b')).toEqual({ xs: ['a', '\u0301b'] });
+    });
+
+    it('encodes empty containers without blank lines (§12)', () => {
+      for (const value of [{ a: {} }, [{}], { a: [{}, { b: {} }] }]) {
+        expect(encode(value)).not.toMatch(/^$/m);
       }
     });
   });

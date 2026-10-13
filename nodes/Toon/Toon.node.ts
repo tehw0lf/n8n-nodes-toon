@@ -171,7 +171,7 @@ export class Toon implements INodeType {
             name: 'strict',
             type: 'boolean',
             default: true,
-            description: 'Whether to enforce array counts, indentation multiples, and validation rules',
+            description: 'Whether to enforce array counts, indentation multiples, and validation rules. When off, count mismatches are ignored, duplicate keys and duplicate field names use last-write-wins, tabs are accepted in indentation, blank lines inside arrays are allowed, and a first line indented deeper than expected sets the scope depth. Every other decode error still applies',
           },
         ],
       },

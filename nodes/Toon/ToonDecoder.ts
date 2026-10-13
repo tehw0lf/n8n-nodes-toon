@@ -1,6 +1,6 @@
 /**
  * TOON Decoder - Parses TOON format to JSON
- * Implements TOON Specification v4.2
+ * Implements TOON Specification v4.4
  */
 
 import type { DecoderOptions, FieldEntry, ParsedLine } from './types';
@@ -98,11 +98,14 @@ export class ToonDecoder {
             line,
           });
         }
-        // Non-strict: leading tabs are removed before classification (§12)
-        line = line.replace(/^[ \t]+/, (ws) => ws.replace(/\t/g, ''));
       }
 
-      const indent = line.match(/^( *)/)?.[1].length ?? 0;
+      // Non-strict: each leading tab counts as one level, and the spaces among
+      // the leading whitespace count floor(S / indentSize) levels (§12, §14.4)
+      const leading = line.match(/^[ \t]*/)?.[0] ?? '';
+      const tabs = leading.replace(/ /g, '').length;
+      const indent = leading.length - tabs;
+      const depth = tabs + Math.floor(indent / this.options.indent);
 
       // Indentation MUST be an exact multiple of indentSize in strict mode (§12)
       if (this.options.strict && indent % this.options.indent !== 0) {
@@ -113,8 +116,9 @@ export class ToonDecoder {
       }
 
       parsed.push({
-        content: line.slice(indent),
+        content: line.slice(leading.length),
         indent,
+        depth,
         lineNumber,
         isEmpty: false,
         blankBefore,
@@ -164,7 +168,7 @@ export class ToonDecoder {
    * Depth of a line in indentation levels (§1.3)
    */
   private depthOf(line: ParsedLine): number {
-    return Math.floor(line.indent / this.options.indent);
+    return line.depth;
   }
 
   private peek(): ParsedLine | null {
@@ -181,7 +185,7 @@ export class ToonDecoder {
     // The root scope's content depth is 0 (§1.3), so an indented first line
     // belongs to no scope. Checked before the fast paths below so that `  []`
     // and `  42` are rejected just like an indented `  a: 1` (§12, §14.2).
-    if (this.options.strict && this.depthOf(first) !== 0) {
+    if (this.depthOf(first) !== 0) {
       throw new ToonDecodingError('Root content must start at depth 0', {
         lineNumber: first.lineNumber,
         line: first.content,
@@ -189,7 +193,7 @@ export class ToonDecoder {
     }
 
     // The bare token "[]" is an empty root array (§9.1)
-    // (only at depth 0, §5; a lax decoder reaches here with an indented line)
+    // (only at depth 0, §5)
     if (content === '[]' && this.depthOf(first) === 0) {
       this.pos = 1;
       this.checkNoTrailingContent();
@@ -250,44 +254,24 @@ export class ToonDecoder {
     if (next === null) {
       return;
     }
-    if (this.options.strict) {
-      throw new ToonDecodingError('Trailing content after completed root form', {
-        lineNumber: next.lineNumber,
-        line: next.content,
-      });
-    }
-    // Non-strict decoders MAY ignore it, except scalar lines, which are an
-    // error in any mode (§5, §5.2)
-    for (let i = this.pos; i < this.lines.length; i++) {
-      this.rejectScalarLine(this.lines[i], 'Scalar line after completed root form');
-    }
-    this.pos = this.lines.length;
-  }
-
-  /**
-   * A scalar line has no unquoted colon and is therefore neither a header nor
-   * a key-value line; outside a root primitive it is an error in strict and
-   * non-strict mode alike (§5.2, §14.2)
-   */
-  private rejectScalarLine(line: ParsedLine, message: string): void {
-    if (utils.findUnquoted(line.content, ':') < 0) {
-      throw new ToonDecodingError(message, {
-        lineNumber: line.lineNumber,
-        line: line.content,
-      });
-    }
+    // An error in every mode (§5, §14.2)
+    throw new ToonDecodingError('Trailing content after completed root form', {
+      lineNumber: next.lineNumber,
+      line: next.content,
+    });
   }
 
   /**
    * Attempt to parse a line as a header per §6.
    *
    * Returns null when the line is not header-shaped. Header syntax errors
-   * propagate in strict mode and fall through to key-value parsing otherwise.
+   * propagate in every mode (§14.2); the one exception is a duplicate field
+   * name, which non-strict decoders resolve by last-write-wins (§14.4).
    */
   private tryParseHeader(line: ParsedLine): utils.ParsedHeader | null {
-    const outcome = utils.tryParseHeader(line.content);
+    const outcome = utils.tryParseHeader(line.content, !this.options.strict);
 
-    if (outcome.error !== null && this.options.strict) {
+    if (outcome.error !== null) {
       throw new ToonDecodingError(outcome.error, {
         lineNumber: line.lineNumber,
         line: line.content,
@@ -315,17 +299,12 @@ export class ToonDecoder {
 
       // A deeper line whose predecessor did not open a scope belongs to no
       // scope (§8, §14.2); so does a line between the opener and a raised
-      // content depth, which leaves the scope open
+      // content depth. No non-strict recovery exists for either (§14.4)
       if (lineDepth !== depth) {
-        if (this.options.strict) {
-          throw new ToonDecodingError(
-            'Over-indented line: no enclosing scope was opened',
-            { lineNumber: line.lineNumber, line: line.content },
-          );
-        }
-        this.rejectScalarLine(line, 'Over-indented scalar line');
-        this.pos++;
-        continue;
+        throw new ToonDecodingError(
+          'Over-indented line: no enclosing scope was opened',
+          { lineNumber: line.lineNumber, line: line.content },
+        );
       }
 
       // An object scope reads no rows of its own, so it is inside a span only
@@ -369,19 +348,17 @@ export class ToonDecoder {
     if (header !== null) {
       // A keyless header is valid only at the root or as a list item (§6)
       if (header.key === null) {
-        if (this.options.strict) {
-          throw new ToonDecodingError(
-            'Keyless header is not valid in object-field position',
-            { lineNumber: line.lineNumber, line: line.content },
-          );
-        }
-      } else {
-        this.pos++;
-        const value = header.keyed
-          ? this.parseKeyedTabularBody(header, depth + 1)
-          : this.parseArrayBodyAfterHeader(header, depth);
-        return { key: header.key, value };
+        throw new ToonDecodingError(
+          'Keyless header is not valid in object-field position',
+          { lineNumber: line.lineNumber, line: line.content },
+        );
       }
+
+      this.pos++;
+      const value = header.keyed
+        ? this.parseKeyedTabularBody(header, depth + 1)
+        : this.parseArrayBodyAfterHeader(header, depth);
+      return { key: header.key, value };
     }
 
     // Key-value line (§5.2)
@@ -531,11 +508,12 @@ export class ToonDecoder {
       }
 
       // Between the opener and a raised row depth (non-strict depth jump):
-      // over-indented, the scope stays open (§8)
+      // over-indented, an error in every mode (§8, §14.4)
       if (this.depthOf(line) < rowDepth) {
-        this.rejectScalarLine(line, 'Over-indented scalar line in tabular scope');
-        this.pos++;
-        continue;
+        throw new ToonDecodingError('Over-indented line in tabular scope', {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
       }
 
       if (this.depthOf(line) !== rowDepth) {
@@ -636,28 +614,19 @@ export class ToonDecoder {
       }
 
       if (this.depthOf(line) !== entryDepth) {
-        if (this.options.strict) {
-          throw new ToonDecodingError('Over-indented line in keyed tabular scope', {
-            lineNumber: line.lineNumber,
-            line: line.content,
-          });
-        }
-        this.rejectScalarLine(line, 'Over-indented scalar line in keyed tabular scope');
-        this.pos++;
-        continue;
+        throw new ToonDecodingError('Over-indented line in keyed tabular scope', {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
       }
 
       // Every line at entry depth containing an unquoted colon is an entry row (§9.5)
       const colonIndex = utils.findUnquoted(line.content, ':');
       if (colonIndex < 0) {
-        if (this.options.strict) {
-          throw new ToonDecodingError('Line at entry depth without an unquoted colon', {
-            lineNumber: line.lineNumber,
-            line: line.content,
-          });
-        }
-        this.pos++;
-        continue;
+        throw new ToonDecodingError('Line at entry depth without an unquoted colon', {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
       }
 
       this.checkBlankInSpan(line, count);
@@ -702,15 +671,10 @@ export class ToonDecoder {
       }
 
       if (lineDepth !== itemDepth) {
-        if (this.options.strict) {
-          throw new ToonDecodingError('Over-indented line in list scope', {
-            lineNumber: line.lineNumber,
-            line: line.content,
-          });
-        }
-        this.rejectScalarLine(line, 'Over-indented scalar line in list scope');
-        this.pos++;
-        continue;
+        throw new ToonDecodingError('Over-indented line in list scope', {
+          lineNumber: line.lineNumber,
+          line: line.content,
+        });
       }
 
       this.checkBlankInSpan(line, items.length);
@@ -738,7 +702,8 @@ export class ToonDecoder {
       return {};
     }
 
-    const rest = line.content.slice(2);
+    // The marker may be followed by several spaces (§5.2, App. B.5)
+    const rest = line.content.replace(/^- +/, '');
 
     // The empty inner array item "- []" (§9.2)
     if (rest === '[]') {
@@ -751,6 +716,7 @@ export class ToonDecoder {
     const inner: ParsedLine = {
       content: rest,
       indent: line.indent + 2,
+      depth: line.depth + 1,
       lineNumber: line.lineNumber,
       isEmpty: false,
       blankBefore: false,
@@ -764,7 +730,7 @@ export class ToonDecoder {
       // A keyless header on a hyphen line is the list item itself; its items
       // stand at itemDepth + 1 (§10)
       if (header.key === null) {
-        if (header.fields !== null && this.options.strict) {
+        if (header.fields !== null) {
           throw new ToonDecodingError(
             'Keyless fields-bearing header is not valid as a list item',
             { lineNumber: line.lineNumber, line: line.content },
@@ -832,14 +798,8 @@ export class ToonDecoder {
         break;
       }
       if (lineDepth > fieldDepth) {
-        // Strict mode leaves the line to the list scope, which rejects it
-        // (§14.2); non-strict decoders skip it, except scalar lines (§8)
-        if (this.options.strict) {
-          break;
-        }
-        this.rejectScalarLine(line, 'Over-indented scalar line');
-        this.pos++;
-        continue;
+        // Left to the list scope, which rejects it in every mode (§14.2)
+        break;
       }
 
       // These fields continue the enclosing array's header span (§12)
@@ -863,10 +823,11 @@ export class ToonDecoder {
   }
 
   /**
-   * Enforce a row's cell count against the header's leaf-field count (§14.1)
+   * Enforce a row's cell count against the header's leaf-field count, in
+   * every mode (§14.1)
    */
   private checkWidth(actual: number, expected: number, line: ParsedLine): void {
-    if (this.options.strict && actual !== expected) {
+    if (actual !== expected) {
       throw new ToonDecodingError(
         `Row width mismatch: expected ${expected} cells, got ${actual}`,
         { lineNumber: line.lineNumber, line: line.content },

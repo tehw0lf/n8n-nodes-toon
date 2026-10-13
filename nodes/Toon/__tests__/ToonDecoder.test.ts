@@ -471,10 +471,10 @@ describe('ToonDecoder', () => {
   });
 
   describe('array header fall-through (§9.3 v3.0.3)', () => {
-    it('should treat non-whitespace between ] and : as key-value, not array header', () => {
+    it('should throw in every mode when content appears between ] and : (§6, §14.2)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      // foo[2][bar]: x → literal key, not array header
-      expect(decoder.decode('foo[2][bar]: x')).toEqual({ 'foo[2][bar]': 'x' });
+      // Header syntax errors no longer fall through to a key-value line (spec v4.4)
+      expect(() => decoder.decode('foo[2][bar]: x')).toThrow(ToonDecodingError);
     });
 
     it('should parse a well-formed array header', () => {
@@ -489,11 +489,11 @@ describe('ToonDecoder', () => {
   });
 
   describe('error handling', () => {
-    it('should parse malformed array-like keys as object keys', () => {
+    it('should reject malformed array-like keys in every mode (§14.2)', () => {
       const decoder = new ToonDecoder(defaultOptions);
-      // These look like arrays but don't match the pattern, so treated as object keys
-      expect(decoder.decode('[invalid]: values')).toEqual({ '[invalid]': 'values' });
-      expect(decoder.decode('[-1]: invalid')).toEqual({ '[-1]': 'invalid' });
+      // Header-shaped lines that fail the header grammar are errors, not keys
+      expect(() => decoder.decode('[invalid]: values')).toThrow(ToonDecodingError);
+      expect(() => decoder.decode('[-1]: invalid')).toThrow(ToonDecodingError);
     });
 
     it('should include line number in error', () => {

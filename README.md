@@ -318,11 +318,11 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 - **n8n version:** 0.200.0 or later
 - **Node.js:** 18.x or later
-- **TOON Specification:** v4.2
+- **TOON Specification:** v4.4
 
 ## Specification Compliance
 
-This node implements **TOON Specification v4.2** in full: every normative requirement of Sections 1–16 for encoders and decoders, using the default options. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
+This node implements **TOON Specification v4.4** in full: every normative requirement of Sections 1–16 for encoders and decoders, using the default options. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
 
 ### Implemented Features
 
@@ -342,7 +342,7 @@ This node implements **TOON Specification v4.2** in full: every normative requir
 
 ### Non-Spec Extensions
 
-⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.2 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
+⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.4 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
 
 - **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
@@ -388,7 +388,14 @@ When enabled (default), the decoder validates:
 - Indentation multiples match expected indent size
 - Proper structure and syntax
 
-Disable for lenient parsing of hand-written TOON.
+Disabling strict mode does not make the decoder lenient in general: every error condition of the specification still applies. Non-strict mode only applies these five recoveries (§14.4):
+- Count mismatches (declared length versus actual items, rows, or entries) are ignored
+- Duplicate keys at the same depth, and duplicate field names in a header, resolve by last-write-wins
+- A tab in the indentation counts as one level
+- Blank lines inside an array's rows, items, or entries are ignored
+- A first line indented deeper than expected sets the scope's depth (a later line between the two depths is still an error)
+
+Malformed headers, row width mismatches, over-indented lines, a first line indented at the root and trailing content after a root form are errors in both modes.
 
 ### Path Expansion
 
@@ -440,7 +447,7 @@ This node has **zero production dependencies**:
 
 **Cause:** TOON data doesn't match expected structure.
 
-**Solution:** Disable strict mode or fix indentation/counts in TOON data.
+**Solution:** Fix the TOON data. Disabling strict mode only relaxes count mismatches and the other recoveries listed under [Strict Mode](#strict-mode); every other error still applies.
 
 ### Issue: Key folding conflicts
 
@@ -495,7 +502,7 @@ See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml)
 
 ## Resources
 
-- **TOON Specification v4.2:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
+- **TOON Specification v4.4:** Official spec at [github.com/toon-format/spec](https://github.com/toon-format/spec) or see [SPEC.md](SPEC.md) in this repository
 - **n8n Documentation:** https://docs.n8n.io/
 - **Community Nodes Guide:** https://docs.n8n.io/integrations/community-nodes/
 - **GitHub Repository:** https://github.com/tehw0lf/n8n-nodes-toon
@@ -515,4 +522,4 @@ Contributions are welcome! Please open an issue or pull request on GitHub.
 
 ---
 
-**Note:** This node implements the [TOON Specification v4.2](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
+**Note:** This node implements the [TOON Specification v4.4](https://github.com/toon-format/spec). See `SPEC.md` for complete format documentation or visit the official spec repository.
