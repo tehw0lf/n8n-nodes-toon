@@ -1,6 +1,6 @@
 /**
  * TOON (Token-Oriented Object Notation) Type Definitions
- * Spec version: 4.2
+ * Spec version: 4.4
  */
 
 /**
@@ -70,8 +70,10 @@ export interface FieldEntry {
 export interface ParsedLine {
   /** Line content without line number */
   content: string;
-  /** Leading indentation spaces */
+  /** Leading indentation spaces (tabs excluded) */
   indent: number;
+  /** Indentation depth in levels (§1.3, §12): tabs count one level each in non-strict mode */
+  depth: number;
   /** Line number (1-indexed) */
   lineNumber: number;
   /** Whether line is empty or whitespace */

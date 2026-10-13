@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification v4.2** (see `SPEC.md`) with **zero external production dependencies**. Archived copies of earlier spec revisions are kept alongside it as `SPEC-v*-archived.md`.
+This is an n8n community node for bidirectional conversion between TOON (Token-Oriented Object Notation) and JSON formats. The implementation follows the **TOON Specification** version named in `package.json` (`toonSpecVersion`; see `SPEC.md`) with **zero external production dependencies**. Archived copies of earlier spec revisions are kept alongside it as `SPEC-v*-archived.md`.
 
 ## Development Setup
 
@@ -103,21 +103,34 @@ introduced a given rule; they are historical and intentionally not updated.
 | §7.3 | Key quoting rules | `ToonUtils.keyNeedsQuoting` | ✅ |
 | §8 | Key-value parsing | `ToonDecoder.parseObject` | ✅ |
 | §9.3 | Tabular array detection (uniform objects with primitive values) | `ToonUtils.isUniformArray`, `ToonEncoder.encodeTabular` | ✅ |
-| §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3)* | `ToonDecoder.isValidArrayHeader` | ✅ |
+| §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3; superseded by v4.4.0: an error in both modes)* | `ToonDecoder.isValidArrayHeader` | ✅ |
 | §11 | Delimiter scoping (comma / tab / pipe) | `ToonDecoder.parseDelimitedTokens`, `ToonEncoder.encodePrimitiveArray` | ✅ |
 | §12 | No trailing newline | `ToonEncoder.encode` | ✅ |
 | §13.4 | Key folding (safe mode, dotted paths) | `ToonEncoder.foldKeys` | ✅ |
 | §13.4 | Path expansion (safe mode) | `ToonDecoder.expandPaths` | ✅ |
 | §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `parseArray`, `parseTabularArray` | ✅ |
 | §14 | Strict mode: invalid array header (non-whitespace between `]` and `{`/`:`) *(v3.0.3)* | `ToonDecoder.isInvalidArrayHeader` | ✅ |
-| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3)* | `ToonDecoder.rejectScalarLine` | ✅ |
+| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3; superseded by v4.4.0: that exception is gone, see the rows below; `rejectScalarLine` was removed)* | `ToonDecoder.parseObject`, `parseListItems`, `parseKeyedTabularBody`, `checkNoTrailingContent` | ✅ |
 | §5.2 | A hyphen marks a list item only at item depth; at a list-item object's field depth the line is a key-value line *(v4.3.0)* | `ToonDecoder.parseListItemRestFields` | ✅ |
-| §5.2, §6, §14.2 | A line whose first unquoted `[` precedes its first unquoted colon must match the header grammar, otherwise it is a header syntax error (strict) or a key-value line (non-strict) *(v4.3.0)* | `ToonUtils.parseHeader` | ✅ |
+| §5.2, §6, §14.2 | A line whose first unquoted `[` precedes its first unquoted colon must match the header grammar, otherwise it is a header syntax error (strict) or a key-value line (non-strict) *(v4.3.0; superseded by v4.4.0: an error in both modes)* | `ToonUtils.parseHeader` | ✅ |
 | §6 | A line without an unquoted colon is never a header *(v4.3.0)* | `ToonUtils.parseHeader` | ✅ |
 | §6, §12 | No whitespace between a field name and its nested field group *(v4.3.0)* | `ToonUtils.parseFieldList` | ✅ |
 | §5 | Root `[]` and root primitive must stand at depth 0 in any mode *(v4.3.0)* | `ToonDecoder.parseRoot` | ✅ |
 | §12 | Blank lines are spaces only: a tab makes a line non-blank in strict mode, NBSP never blanks a line *(v4.3.0)* | `ToonDecoder.parseLines` | ✅ |
 | §8, §14 | Non-strict depth-jump leniency: the first line's depth becomes the scope's content depth *(v4.3.0)* | `ToonDecoder.scopeDepth` | ✅ |
+| §14.1-§14.3 | Every listed condition is an error in both modes; non-strict mode applies only the five recoveries of §14.4 *(v4.4.0)* | `ToonDecoder` (`checkWidth`, `parseObject`, `parseListItems`, `parseTabularRows`, `parseKeyedTabularBody`, `checkNoTrailingContent`) | ✅ |
+| §6, §14.2 | A header syntax error is an error in both modes, with no fall-through to a key-value line *(v4.4.0)* | `ToonDecoder.tryParseHeader` | ✅ |
+| §6, §14.2 | A keyless header in object-field position, or a keyless fields-bearing header as a list item, is an error in both modes *(v4.4.0)* | `ToonDecoder.parseFieldLine`, `parseListItem` | ✅ |
+| §9.3, §9.5, §14.1 | A row or entry-row width mismatch is an error in both modes; only counts are strict-only *(v4.4.0)* | `ToonDecoder.checkWidth` | ✅ |
+| §9.5 | A line at keyed tabular entry depth without a colon is an error in both modes *(v4.4.0)* | `ToonDecoder.parseKeyedTabularBody` | ✅ |
+| §8, §14.2, §14.4 | An over-indented line is an error in both modes, including a line between the opener's content depth and a raised depth *(v4.4.0)* | `ToonDecoder.parseObject`, `parseTabularRows`, `parseKeyedTabularBody`, `parseListItems`, `parseListItemRestFields` | ✅ |
+| §8, §14.2 | The root's first line at depth 1 or deeper is an error in both modes *(v4.4.0)* | `ToonDecoder.parseRoot` | ✅ |
+| §5, §14.2 | Trailing content after a completed root form is an error in both modes *(v4.4.0)* | `ToonDecoder.checkNoTrailingContent` | ✅ |
+| §1.2, §6 | Whitespace is SP and HTAB only; a key may contain inner whitespace and NBSP, only whitespace directly before `[` is an error *(v4.4.0)* | `ToonUtils.parseHeader`, `parseFieldList` | ✅ |
+| §6, §14.2 | An unquoted delimiter in a field list that differs from the declared one is a header syntax error *(v4.4.0)* | `ToonUtils.splitFieldEntries` | ✅ |
+| §9.3, §14.4 | Duplicate field names: an error in strict mode, last-write-wins in non-strict mode *(v4.4.0)* | `ToonUtils.parseHeader` (`tolerateDuplicateFields`) | ✅ |
+| §12, §14.4 | Non-strict tabs in indentation count as one level each, and a tab-indented `#` line is content *(v4.4.0)* | `ToonDecoder.parseLines` | ✅ |
+| §5.2, App. B.5 | A list-item marker may be followed by several spaces *(v4.4.0)* | `ToonDecoder.parseListItem` | ✅ |
 
 ## Testing
 

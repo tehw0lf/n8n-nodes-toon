@@ -1,8 +1,8 @@
 {
 	"name": "@tehw0lf/n8n-nodes-toon",
-	"version": "1.4.5",
+	"version": "1.4.6",
 	"description": "n8n node for TOON (Token-Oriented Object Notation) format conversion - bidirectional conversion between TOON and JSON with zero external dependencies",
-	"toonSpecVersion": "4.3.0",
+	"toonSpecVersion": "4.4.0",
 	"license": "MIT",
 	"homepage": "https://github.com/tehw0lf/n8n-nodes-toon#readme",
 	"keywords": [

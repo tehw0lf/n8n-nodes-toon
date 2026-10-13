@@ -1,6 +1,6 @@
 /**
  * TOON Utilities - Core helper functions for encoding and decoding
- * Implements TOON Specification v4.2
+ * Implements TOON Specification v4.4
  */
 
 import type { Delimiter, FieldEntry } from './types';
@@ -538,7 +538,7 @@ export function parseFieldList(body: string, delimiter: Delimiter): FieldEntry[]
 
     // Whitespace MUST NOT appear between a field name and its nested field
     // group (§6)
-    if (/\s$/.test(entry.slice(0, bracePos))) {
+    if (/[ \t]$/.test(entry.slice(0, bracePos))) {
       throw new Error(`Whitespace between field name and nested field group: ${entry}`);
     }
 
@@ -612,6 +612,11 @@ function splitFieldEntries(body: string, delimiter: Delimiter): string[] {
         current = '';
         i++;
         continue;
+      } else if ((char === ',' || char === '\t' || char === '|') && char !== delimiter) {
+        // An unquoted delimiter other than the declared one (§6, §14.2)
+        throw new Error(
+          `Delimiter in field list does not match the declared delimiter: ${JSON.stringify(char)}`,
+        );
       }
     }
 
@@ -671,7 +676,7 @@ export interface ParsedHeader {
  *
  * `header` is null when the line is not a header at all; `error` carries the
  * diagnostic when the line is header-shaped but malformed (§14.2), which
- * strict decoders surface and non-strict decoders may ignore.
+ * decoders surface in every mode.
  */
 export interface HeaderParseOutcome {
   header: ParsedHeader | null;
@@ -681,9 +686,12 @@ export interface HeaderParseOutcome {
 /**
  * Parse a header without throwing, reporting malformation as a message (§6).
  */
-export function tryParseHeader(content: string): HeaderParseOutcome {
+export function tryParseHeader(
+  content: string,
+  tolerateDuplicateFields = false,
+): HeaderParseOutcome {
   try {
-    return { header: parseHeader(content), error: null };
+    return { header: parseHeader(content, tolerateDuplicateFields), error: null };
   } catch (error) {
     return { header: null, error: (error as Error).message };
   }
@@ -695,9 +703,14 @@ export function tryParseHeader(content: string): HeaderParseOutcome {
  * Returns null when the line is not a header at all (so callers may fall
  * through to key-value classification, §5.2). Throws when the line is
  * recognisably header-shaped but malformed — a header syntax error under
- * §14.2, which strict callers surface and non-strict callers may downgrade.
+ * §14.2, in every mode. A repeated field name is the one exception callers may
+ * opt into with `tolerateDuplicateFields`: non-strict decoders resolve it by
+ * last-write-wins (§9.3, §14.4).
  */
-export function parseHeader(content: string): ParsedHeader | null {
+export function parseHeader(
+  content: string,
+  tolerateDuplicateFields = false,
+): ParsedHeader | null {
   // A line whose first unquoted colon precedes its first unquoted "[" is
   // never a header; it is a key-value line (§5.2).
   const firstColon = findUnquoted(content, ':');
@@ -725,7 +738,9 @@ export function parseHeader(content: string): ParsedHeader | null {
   const segment = rest.slice(1, closing);
 
   // Whitespace MUST NOT appear between a key and its bracket segment (§6)
-  if (/\s/.test(keyPart)) {
+  // — only whitespace (SP, HTAB) directly before the "[" counts; NBSP and inner
+  // whitespace are ordinary key content (§1.2)
+  if (/[ \t]$/.test(keyPart)) {
     throw new Error(`Whitespace between key and bracket segment: ${content}`);
   }
 
@@ -766,7 +781,7 @@ export function parseHeader(content: string): ParsedHeader | null {
   }
 
   // A field name repeated within the same field list is a header defect (§14.2)
-  if (fields !== null) {
+  if (fields !== null && !tolerateDuplicateFields) {
     const duplicate = findDuplicateFieldName(fields);
     if (duplicate !== null) {
       throw new Error(`Duplicate field name in header field list: ${duplicate}`);
