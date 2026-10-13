@@ -103,14 +103,14 @@ introduced a given rule; they are historical and intentionally not updated.
 | §7.3 | Key quoting rules | `ToonUtils.keyNeedsQuoting` | ✅ |
 | §8 | Key-value parsing | `ToonDecoder.parseObject` | ✅ |
 | §9.3 | Tabular array detection (uniform objects with primitive values) | `ToonUtils.isUniformArray`, `ToonEncoder.encodeTabular` | ✅ |
-| §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3)* | `ToonDecoder.isValidArrayHeader` | ✅ |
+| §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3; superseded by v4.4.0: an error in both modes)* | `ToonDecoder.isValidArrayHeader` | ✅ |
 | §11 | Delimiter scoping (comma / tab / pipe) | `ToonDecoder.parseDelimitedTokens`, `ToonEncoder.encodePrimitiveArray` | ✅ |
 | §12 | No trailing newline | `ToonEncoder.encode` | ✅ |
 | §13.4 | Key folding (safe mode, dotted paths) | `ToonEncoder.foldKeys` | ✅ |
 | §13.4 | Path expansion (safe mode) | `ToonDecoder.expandPaths` | ✅ |
 | §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `parseArray`, `parseTabularArray` | ✅ |
 | §14 | Strict mode: invalid array header (non-whitespace between `]` and `{`/`:`) *(v3.0.3)* | `ToonDecoder.isInvalidArrayHeader` | ✅ |
-| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3; superseded by v4.4.0: that exception is gone, see the rows below)* | `ToonDecoder.rejectScalarLine` | ✅ |
+| §5.2, §14.2 | Scalar lines outside a root primitive are an error in non-strict mode too, except a colon-less line at keyed tabular entry depth, which §9.5 lets a non-strict decoder skip *(v4.1.3; superseded by v4.4.0: that exception is gone, see the rows below; `rejectScalarLine` was removed)* | `ToonDecoder.parseObject`, `parseListItems`, `parseKeyedTabularBody`, `checkNoTrailingContent` | ✅ |
 | §5.2 | A hyphen marks a list item only at item depth; at a list-item object's field depth the line is a key-value line *(v4.3.0)* | `ToonDecoder.parseListItemRestFields` | ✅ |
 | §5.2, §6, §14.2 | A line whose first unquoted `[` precedes its first unquoted colon must match the header grammar, otherwise it is a header syntax error (strict) or a key-value line (non-strict) *(v4.3.0; superseded by v4.4.0: an error in both modes)* | `ToonUtils.parseHeader` | ✅ |
 | §6 | A line without an unquoted colon is never a header *(v4.3.0)* | `ToonUtils.parseHeader` | ✅ |

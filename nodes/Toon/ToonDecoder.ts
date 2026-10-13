@@ -556,10 +556,8 @@ export class ToonDecoder {
 
       for (const entry of entries) {
         if (entry.children === null) {
-          // A leaf field with no remaining cell is absent (§14.1, non-strict)
-          if (index < cells.length) {
-            utils.setDecodedKey(obj, entry.name, this.parseValueToken(cells[index], line));
-          }
+          // Row width equals the leaf count here: checkWidth errors otherwise (§14.1)
+          utils.setDecodedKey(obj, entry.name, this.parseValueToken(cells[index], line));
           index++;
         } else {
           utils.setDecodedKey(obj, entry.name, walk(entry.children));
