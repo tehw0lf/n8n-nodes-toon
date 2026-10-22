@@ -46,7 +46,7 @@ nodes/Toon/
 ├── Toon.node.ts          # Main n8n node implementation
 ├── Toon.node.json        # Node metadata
 ├── toon.svg              # Node icon
-└── __tests__/            # Test suite (179 tests)
+└── __tests__/            # Test suite
     ├── ToonUtils.test.ts
     ├── ToonEncoder.test.ts
     ├── ToonDecoder.test.ts
@@ -135,7 +135,7 @@ introduced a given rule; they are historical and intentionally not updated.
 ## Testing
 
 ```bash
-# Run all tests (179 tests)
+# Run all tests
 npm test
 ```
 
