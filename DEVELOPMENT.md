@@ -46,11 +46,7 @@ nodes/Toon/
 ├── Toon.node.ts          # Main n8n node implementation
 ├── Toon.node.json        # Node metadata
 ├── toon.svg              # Node icon
-└── __tests__/            # Test suite
-    ├── ToonUtils.test.ts
-    ├── ToonEncoder.test.ts
-    ├── ToonDecoder.test.ts
-    └── integration.test.ts
+└── __tests__/            # Test suite (every *.test.ts here, see testMatch in jest.config.js)
 ```
 
 ## Operations
