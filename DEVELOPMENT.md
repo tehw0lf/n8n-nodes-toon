@@ -153,7 +153,7 @@ npm run build
 npm link
 
 # In your n8n installation directory
-npm link n8n-nodes-toon
+npm link @tehw0lf/n8n-nodes-toon
 
 # Restart n8n
 npm run start  # or n8n start
@@ -167,7 +167,7 @@ npm run lint && npm run test && npm run build
 
 # Verify package contents
 npm pack
-tar -tzf n8n-nodes-toon-*.tgz
+tar -tzf tehw0lf-n8n-nodes-toon-*.tgz
 
 # Publish (requires npm account and NPM_TOKEN)
 npm publish
