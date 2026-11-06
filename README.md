@@ -326,7 +326,7 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 ## Specification Compliance
 
-This node implements **TOON Specification v4.4** in full for the decoder and, using the default options, for the encoder. Every other normative requirement of Sections 1–16 is implemented. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
+This node implements **TOON Specification v4.4** in full for the decoder and, using the default options, for the encoder; every normative requirement of Sections 1–16 is implemented. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
 
 ### Implemented Features
 

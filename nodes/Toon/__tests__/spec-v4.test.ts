@@ -441,6 +441,16 @@ describe('TOON v4.1 conformance', () => {
         new ToonEncoder({ ...encoderOptions, keyFolding: 'safe' }).encode(input),
       ).toBe('__proto__:\n  a: 1\nx.y: 1');
     });
+
+    it.each(['constructor', 'prototype'])(
+      'does not fold a chain that starts at %s',
+      (key) => {
+        const input = JSON.parse(`{ "${key}": { "a": 1 }, "x": { "y": 1 } }`);
+        expect(
+          new ToonEncoder({ ...encoderOptions, keyFolding: 'safe' }).encode(input),
+        ).toBe(`${key}:\n  a: 1\nx.y: 1`);
+      },
+    );
   });
 
   describe('blank lines and header spans (§12)', () => {
