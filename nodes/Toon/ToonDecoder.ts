@@ -893,9 +893,13 @@ export class ToonDecoder {
       } else {
         // Recursively expand nested objects
         if (utils.isPlainObject(value)) {
-          result[key] = this.expandPaths(value as Record<string, unknown>);
+          utils.setDecodedKey(
+            result,
+            key,
+            this.expandPaths(value as Record<string, unknown>),
+          );
         } else {
-          result[key] = value;
+          utils.setDecodedKey(result, key, value);
         }
       }
     }

@@ -599,6 +599,58 @@ flags[3]: true, false, true`;
   });
 
   describe('prototype pollution protection', () => {
+    describe('own __proto__ keys with expandPaths safe', () => {
+      const decode = (toon: string): Record<string, unknown> =>
+        new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' }).decode(toon) as Record<
+          string,
+          unknown
+        >;
+
+      it('keeps a first __proto__ key as an own key', () => {
+        const result = decode('__proto__:\n  polluted: 1');
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+        expect(Object.keys(result)).toEqual(['__proto__']);
+        expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({
+          polluted: 1,
+        });
+      });
+
+      it('keeps a non-first __proto__ key as an own key', () => {
+        const result = decode('a: 1\n__proto__:\n  polluted: 1');
+        expect(result.a).toBe(1);
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+        expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({
+          polluted: 1,
+        });
+        expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+      });
+
+      it('keeps a nested __proto__ key as an own key', () => {
+        const result = decode('a:\n  __proto__:\n    polluted: 1');
+        const a = result.a as Record<string, unknown>;
+        expect(Object.getPrototypeOf(a)).toBe(Object.prototype);
+        expect(Object.getOwnPropertyDescriptor(a, '__proto__')?.value).toEqual({ polluted: 1 });
+        expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+      });
+
+      it('keeps a __proto__ key with a primitive value', () => {
+        const result = decode('__proto__: 1\nb: 2');
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+        expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toBe(1);
+        expect(result.b).toBe(2);
+      });
+
+      it('keeps a __proto__ key next to an expanded dotted key', () => {
+        const result = decode('x.y: 1\n__proto__:\n  polluted: 1');
+        expect(result.x).toEqual({ y: 1 });
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+        expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({
+          polluted: 1,
+        });
+        expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+      });
+    });
+
     it('should reject __proto__ in path expansion', () => {
       const decoder = new ToonDecoder({ ...defaultOptions, expandPaths: 'safe' });
       const toon = '__proto__.polluted: "bad"';
