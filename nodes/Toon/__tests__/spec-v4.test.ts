@@ -408,6 +408,39 @@ describe('TOON v4.1 conformance', () => {
       expect(Object.prototype.hasOwnProperty.call(result.items[0], '__proto__')).toBe(true);
       expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
     });
+
+    it('encodes an own __proto__ key with a primitive value', () => {
+      expect(encode(JSON.parse('{ "__proto__": "x", "safe": true }'))).toBe(
+        '__proto__: x\nsafe: true',
+      );
+    });
+
+    it('encodes a nested own __proto__ key', () => {
+      expect(encode(JSON.parse('{ "a": { "__proto__": { "b": 1 } } }'))).toBe(
+        'a:\n  __proto__:\n    b: 1',
+      );
+    });
+
+    it('encodes own __proto__ keys as a tabular field', () => {
+      expect(encode(JSON.parse('[{ "__proto__": 1 }, { "__proto__": 2 }]'))).toBe(
+        '[2]{__proto__}:\n  1\n  2',
+      );
+    });
+
+    it('round-trips a nested own __proto__ key without pollution', () => {
+      const input = JSON.parse('{ "a": { "__proto__": { "b": 1 } } }');
+      const result = decode(encode(input)) as { a: Record<string, unknown> };
+      expect(Object.prototype.hasOwnProperty.call(result.a, '__proto__')).toBe(true);
+      expect(result).toEqual(input);
+      expect(({} as Record<string, unknown>)['b']).toBeUndefined();
+    });
+
+    it('does not fold a chain that starts at __proto__', () => {
+      const input = JSON.parse('{ "__proto__": { "a": 1 }, "x": { "y": 1 } }');
+      expect(
+        new ToonEncoder({ ...encoderOptions, keyFolding: 'safe' }).encode(input),
+      ).toBe('__proto__:\n  a: 1\nx.y: 1');
+    });
   });
 
   describe('blank lines and header spans (§12)', () => {

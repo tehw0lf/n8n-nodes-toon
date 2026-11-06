@@ -326,7 +326,7 @@ Workflow: Fetch Data → JSON to TOON → Format Report → Send Email
 
 ## Specification Compliance
 
-This node implements **TOON Specification v4.4** in full for the decoder and, using the default options, for the encoder, with one known gap: the encoder still drops an own `__proto__` key (tracked in #45). Every other normative requirement of Sections 1–16 is implemented. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
+This node implements **TOON Specification v4.4** in full for the decoder and, using the default options, for the encoder. Every other normative requirement of Sections 1–16 is implemented. Two additional convenience options fall outside the specification and are documented as [non-spec extensions](#non-spec-extensions) below.
 
 ### Implemented Features
 
@@ -377,7 +377,7 @@ The specification requires implementations to document the following (§2, §3, 
 
 **Object key order (§2).** Key order is preserved as encountered, except that tabular and keyed tabular forms reorder to the header's field order. One deviation is inherent to the JavaScript object model: **integer-like keys are hoisted** and ordered numerically ahead of string keys, so a document with keys `b`, `1`, `a` decodes to an object ordered `1`, `b`, `a`. Array order is always preserved.
 
-**Prototype keys (§15).** Decoded keys are installed with `Object.defineProperty`, so `__proto__`, `constructor`, and `prototype` become ordinary own data properties and decoding never mutates a prototype chain.
+**Prototype keys (§15).** Decoded keys are installed with `Object.defineProperty`, so `__proto__`, `constructor`, and `prototype` become ordinary own data properties and decoding never mutates a prototype chain. The encoder likewise emits own `__proto__`, `constructor`, and `prototype` keys as ordinary keys, and key folding never starts or continues a dotted chain through such a key.
 
 ### Round-Trip Guarantee
 

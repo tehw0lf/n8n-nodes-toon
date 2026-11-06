@@ -80,7 +80,7 @@ export class ToonEncoder {
     if (utils.isPlainObject(value)) {
       const result: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(value)) {
-        result[key] = this.normalizeValue(val);
+        utils.setDecodedKey(result, key, this.normalizeValue(val));
       }
       return result;
     }
@@ -479,13 +479,17 @@ export class ToonEncoder {
         // Fold the chain
         const foldedKey = chain.join('.');
         const leafValue = this.getLeafValue(value, chain.length - 1);
-        result[foldedKey] = leafValue;
+        utils.setDecodedKey(result, foldedKey, leafValue);
       } else {
         // Keep as-is, but recursively fold nested objects
         if (utils.isPlainObject(value)) {
-          result[key] = this.foldKeys(value as Record<string, unknown>);
+          utils.setDecodedKey(
+            result,
+            key,
+            this.foldKeys(value as Record<string, unknown>),
+          );
         } else {
-          result[key] = value;
+          utils.setDecodedKey(result, key, value);
         }
       }
     }
@@ -501,6 +505,11 @@ export class ToonEncoder {
     value: unknown,
     maxDepth: number,
   ): string[] {
+    // An unsafe first segment never starts a chain (same rule as for later segments)
+    if (!utils.isSafeKey(key)) {
+      return [key];
+    }
+
     const chain: string[] = [key];
     let current = value;
     let depth = 1;

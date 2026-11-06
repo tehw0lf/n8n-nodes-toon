@@ -102,6 +102,7 @@ introduced a given rule; they are historical and intentionally not updated.
 | §9.3 | Non-whitespace between `]` and `{`/`:` → fall-through to key-value *(v3.0.3; superseded by v4.4.0: an error in both modes)* | `ToonUtils.parseHeader` | ✅ |
 | §11 | Delimiter scoping (comma / tab / pipe) | `ToonUtils.splitDelimited`, `ToonEncoder.encodeInlineArray` | ✅ |
 | §12 | No trailing newline | `ToonEncoder.encode` | ✅ |
+| §15 | Encoder keeps an own `__proto__` key as an ordinary key (no prototype setter) | `ToonEncoder.normalizeValue`, `foldKeys` | ✅ |
 | non-spec extension | Key folding (safe mode, dotted paths; see README, *Non-Spec Extensions*) | `ToonEncoder.foldKeys` | ✅ |
 | non-spec extension | Path expansion (safe mode; see README, *Non-Spec Extensions*) | `ToonDecoder.expandPaths` | ✅ |
 | §14 | Strict mode: indentation, array counts, tab errors | `ToonDecoder.parseLines`, `checkCount` | ✅ |

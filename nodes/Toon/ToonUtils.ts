@@ -880,7 +880,8 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 }
 
 /**
- * Assign a decoded key as an ordinary own data property per §15.
+ * Assign a key as an ordinary own data property per §15 (used by the decoder
+ * and by the encoder when it builds normalized and folded objects).
  *
  * No key has special meaning in TOON, so `__proto__` and friends MUST become
  * own entries rather than mutating the prototype chain. Plain assignment would
