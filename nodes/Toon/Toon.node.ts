@@ -269,6 +269,9 @@ export class Toon implements INodeType {
               error: error.message,
               itemIndex,
             },
+            error: new NodeOperationError(this.getNode(), error as Error, {
+              itemIndex,
+            }),
             pairedItem: { item: itemIndex },
           });
         } else {

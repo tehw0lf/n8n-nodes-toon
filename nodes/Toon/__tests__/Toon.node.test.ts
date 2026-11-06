@@ -35,6 +35,15 @@ describe('Toon.execute with Continue On Fail', () => {
     expect(out[0].pairedItem).toEqual({ item: 0 });
   });
 
+  it('sets an item-level NodeOperationError so n8n can route it to the error output', async () => {
+    const items = [{ json: { id: 42, data: BAD_TOON } }];
+    const [out] = await new Toon().execute.call(makeContext(items, true));
+    expect(out[0].error).toBeInstanceOf(NodeOperationError);
+    expect(out[0].error?.message).toContain('Count mismatch');
+    expect(out[0].json).toMatchObject({ id: 42, data: BAD_TOON, itemIndex: 0 });
+    expect(typeof out[0].json.error).toBe('string');
+  });
+
   it('overwrites input fields named error and itemIndex', async () => {
     const items = [
       { json: { ok: 1, data: '{}' } },
@@ -60,6 +69,9 @@ describe('Toon.execute with Continue On Fail', () => {
     expect(out[1].json.itemIndex).toBe(1);
     expect(out[1].json).not.toHaveProperty('result');
     expect(out[2].json).toEqual({ id: 3, data: 'b: 2', result: { b: 2 } });
+    expect(out[0].error).toBeUndefined();
+    expect(out[1].error).toBeInstanceOf(NodeOperationError);
+    expect(out[2].error).toBeUndefined();
   });
 
   it('still throws a NodeOperationError without Continue On Fail', async () => {
