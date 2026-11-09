@@ -159,10 +159,10 @@ When **Include Token Metrics** is enabled for JSON→TOON conversion, the output
 
 ### Failed Items (Continue On Fail)
 
-When **On Error** is set to a **Continue** option and an item fails, the failed item carries all fields of its input item plus `error` (the error message) and `itemIndex`, and an item-level error. Input fields named `error` or `itemIndex` are overwritten.
+When **On Error** is set to a **Continue** option and an item fails, the failed item carries all fields of its input item plus the error message. Input fields named `error` are overwritten.
 
-- **Continue (using error output)**: failed items go to the node's error output.
-- **Continue (regular output)**: failed items come out on the regular output together with the successful items.
+- **Continue (using error output)**: failed items go to the node's error output, with all input fields, `error` (the error message) and `details.itemIndex`. Input fields named `details` are overwritten.
+- **Continue (regular output)**: failed items come out on the regular output together with the successful items, with all input fields, `error` (the error message) and `itemIndex`. Input fields named `itemIndex` are overwritten.
 
 ## Usage Examples
 
