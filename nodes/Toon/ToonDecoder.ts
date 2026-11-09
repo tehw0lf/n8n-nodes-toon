@@ -932,7 +932,7 @@ export class ToonDecoder {
         // Conflict: need object but found non-object
         if (this.options.strict) {
           throw new ToonDecodingError(
-            `Path expansion conflict at '${path.slice(0, i + 1).join('.')}': expected object, found ${typeof current[segment]}`,
+            `Path expansion conflict at '${path.slice(0, i + 1).join('.')}': cannot combine ${this.describeKind(current[segment])} with object`,
           );
         }
         // LWW: overwrite
@@ -957,11 +957,11 @@ export class ToonDecoder {
 
   /**
    * Store a value at a key of a target object while expanding paths. Used for
-   * literal keys and for the final segment of a dotted path, so that the result
-   * does not depend on which of the two comes first: two plain objects merge
-   * key by key, any other overlap on an existing own key is a conflict (an
-   * error in strict mode, last write wins in non-strict mode, keeping the
-   * position of the first occurrence).
+   * literal keys and for the final segment of a dotted path: two plain objects
+   * merge key by key whichever comes first, and any other overlap on an existing
+   * own key is a conflict (an error in strict mode in either order; in
+   * non-strict mode the later line wins, keeping the position of the first
+   * occurrence).
    */
   private assignExpanded(
     target: Record<string, unknown>,
