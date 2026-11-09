@@ -77,6 +77,9 @@ cannot go stale.
 
 Version annotations like *(v3.0.3)* in the table below mark the release that
 introduced a given rule; they are historical and intentionally not updated.
+When a later release changes such a rule, the annotation keeps the introducing
+version and appends `; superseded by vX.Y.Z: …` with what changed, e.g.
+*(v3.0.3; superseded by v4.4.0: an error in both modes)*.
 
 | Spec Section | Feature | Implementation | Status |
 |---|---|---|---|
