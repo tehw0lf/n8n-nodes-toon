@@ -263,14 +263,25 @@ export class Toon implements INodeType {
         });
       } catch (error) {
         if (this.continueOnFail()) {
-          returnData.push({
-            json: {
-              ...(items[itemIndex].json as IDataObject),
-              error: error.message,
-              itemIndex,
-            },
-            pairedItem: { item: itemIndex },
-          });
+          if (this.getNode().onError === 'continueErrorOutput') {
+            // n8n routes an item to the error output when its json holds only
+            // `error`, `message` and `details`, and then merges the fields of the
+            // paired input item back in. An item-level `error` would instead make
+            // n8n replace the whole json with `{ error: message }`.
+            returnData.push({
+              json: { error: error.message, details: { itemIndex } },
+              pairedItem: { item: itemIndex },
+            });
+          } else {
+            returnData.push({
+              json: {
+                ...(items[itemIndex].json as IDataObject),
+                error: error.message,
+                itemIndex,
+              },
+              pairedItem: { item: itemIndex },
+            });
+          }
         } else {
           throw new NodeOperationError(this.getNode(), error as Error, {
             itemIndex,

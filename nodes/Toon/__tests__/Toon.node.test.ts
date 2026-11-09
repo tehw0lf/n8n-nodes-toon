@@ -8,6 +8,7 @@ const BAD_TOON = 'users[2]{id}:\n  1';
 function makeContext(
   items: INodeExecutionData[],
   continueOnFail: boolean,
+  onError?: string,
 ): IExecuteFunctions {
   const params: Record<string, unknown> = {
     operation: 'toonToJson',
@@ -20,7 +21,14 @@ function makeContext(
     getNodeParameter: (name: string, _i: number, fallback?: unknown) =>
       name in params ? params[name] : fallback,
     continueOnFail: () => continueOnFail,
-    getNode: () => ({ name: 'TOON', type: 'toon', typeVersion: 1, position: [0, 0], parameters: {} }),
+    getNode: () => ({
+      name: 'TOON',
+      type: 'toon',
+      typeVersion: 1,
+      position: [0, 0],
+      parameters: {},
+      onError,
+    }),
   } as unknown as IExecuteFunctions;
 }
 
@@ -32,6 +40,25 @@ describe('Toon.execute with Continue On Fail', () => {
     expect(out[0].json).toMatchObject({ id: 42, data: BAD_TOON, itemIndex: 0 });
     expect(typeof out[0].json.error).toBe('string');
     expect(out[0].json.error).toContain('Count mismatch');
+    expect(out[0].pairedItem).toEqual({ item: 0 });
+  });
+
+  it('sets no item-level error with Continue (regular output), which would make n8n drop the input fields', async () => {
+    const items = [{ json: { id: 42, data: BAD_TOON } }];
+    const [out] = await new Toon().execute.call(makeContext(items, true, 'continueRegularOutput'));
+    expect(out[0].error).toBeUndefined();
+    expect(out[0].json).toMatchObject({ id: 42, data: BAD_TOON, itemIndex: 0 });
+  });
+
+  it('shapes the error item so n8n routes it to the error output with Continue (using error output)', async () => {
+    const items = [{ json: { id: 42, data: BAD_TOON } }];
+    const [out] = await new Toon().execute.call(makeContext(items, true, 'continueErrorOutput'));
+    // Only `error`, `message` and `details` keys: n8n moves such an item to the
+    // error output and merges the paired input item's fields back in.
+    expect(Object.keys(out[0].json).sort()).toEqual(['details', 'error']);
+    expect(out[0].json.error).toContain('Count mismatch');
+    expect(out[0].json.details).toEqual({ itemIndex: 0 });
+    expect(out[0].error).toBeUndefined();
     expect(out[0].pairedItem).toEqual({ item: 0 });
   });
 
@@ -60,6 +87,9 @@ describe('Toon.execute with Continue On Fail', () => {
     expect(out[1].json.itemIndex).toBe(1);
     expect(out[1].json).not.toHaveProperty('result');
     expect(out[2].json).toEqual({ id: 3, data: 'b: 2', result: { b: 2 } });
+    expect(out[0].error).toBeUndefined();
+    expect(out[1].error).toBeUndefined();
+    expect(out[2].error).toBeUndefined();
   });
 
   it('still throws a NodeOperationError without Continue On Fail', async () => {
