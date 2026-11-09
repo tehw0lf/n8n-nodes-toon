@@ -392,6 +392,39 @@ describe('ToonDecoder', () => {
       expandPaths: 'safe',
     };
 
+    describe('inherited names in strict mode', () => {
+      const strictOptions: DecoderOptions = { ...expandOptions, strict: true };
+
+      it.each(['toString', 'valueOf', 'hasOwnProperty'])(
+        'should accept %s as an intermediate segment',
+        (name) => {
+          const decoder = new ToonDecoder(strictOptions);
+          expect(decoder.decode(`${name}.x: 1`)).toEqual({ [name]: { x: 1 } });
+        },
+      );
+
+      it.each(['toString', 'valueOf', 'hasOwnProperty'])(
+        'should accept %s as a final segment',
+        (name) => {
+          const decoder = new ToonDecoder(strictOptions);
+          expect(decoder.decode(`a.${name}: 1`)).toEqual({ a: { [name]: 1 } });
+        },
+      );
+
+      it('should still reject a scalar followed by a path through it', () => {
+        const decoder = new ToonDecoder(strictOptions);
+        expect(() => decoder.decode('a: 1\na.b: 2')).toThrow(ToonDecodingError);
+        expect(() => decoder.decode('a: 1\na.b: 2')).toThrow(/Path expansion conflict at 'a'/);
+      });
+
+      it('should still reject a duplicate own key', () => {
+        const decoder = new ToonDecoder(strictOptions);
+        const toon = 'a:\n  b: 2\na.b: 1';
+        expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+        expect(() => decoder.decode(toon)).toThrow(/duplicate key 'a\.b'/);
+      });
+    });
+
     it('should not expand paths when disabled', () => {
       const decoder = new ToonDecoder(defaultOptions);
       const toon = 'level1.level2.value: 42';

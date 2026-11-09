@@ -931,7 +931,7 @@ export class ToonDecoder {
         );
       }
 
-      if (!(segment in current)) {
+      if (!Object.prototype.hasOwnProperty.call(current, segment)) {
         current[segment] = {};
       } else if (!utils.isPlainObject(current[segment])) {
         // Conflict: need object but found non-object
@@ -957,7 +957,10 @@ export class ToonDecoder {
       );
     }
 
-    if (lastSegment in current && this.options.strict) {
+    if (
+      Object.prototype.hasOwnProperty.call(current, lastSegment) &&
+      this.options.strict
+    ) {
       throw new ToonDecodingError(
         `Path expansion conflict: duplicate key '${path.join('.')}'`,
       );
