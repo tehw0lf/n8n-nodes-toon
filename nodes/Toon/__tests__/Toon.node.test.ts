@@ -99,3 +99,24 @@ describe('Toon.execute with Continue On Fail', () => {
     );
   });
 });
+
+describe('Toon node strict option description', () => {
+  const findStrict = (): { description?: string } | undefined => {
+    for (const prop of new Toon().description.properties) {
+      if (prop.name !== 'additionalOptions' || !('options' in prop)) continue;
+      const shown = JSON.stringify(prop.displayOptions?.show ?? {});
+      if (!shown.includes('toonToJson')) continue;
+      return (prop.options as Array<{ name: string; description?: string }>).find(
+        (o) => o.name === 'strict',
+      );
+    }
+    return undefined;
+  };
+
+  it('names the path-expansion recovery and keeps the catch-all sentence', () => {
+    const description = findStrict()?.description ?? '';
+    expect(description).toMatch(/path expansion/i);
+    expect(description).toMatch(/Expand Paths/);
+    expect(description.endsWith('Every other decode error still applies')).toBe(true);
+  });
+});
