@@ -124,15 +124,6 @@ describe('TOON v4.1 conformance', () => {
       expect(encode({ a: '#tag' })).toBe('a: "#tag"');
     });
 
-    it('floors indentation that is not a multiple of the indent size (recovery 3)', () => {
-      expect(decodeLax('user:\n   name: Alice')).toEqual({ user: { name: 'Alice' } });
-      expect(() => decode('user:\n   name: Alice')).toThrow(ToonDecodingError);
-    });
-
-    it('treats a line of only spaces and tabs as blank (recovery 3)', () => {
-      expect(decodeLax('a: 1\n \t \nb: 2')).toEqual({ a: 1, b: 2 });
-    });
-
     it('does not treat a tab-indented "#" line as a comment (§5.1)', () => {
       // Only spaces may precede the "#"; a leading tab is an indentation error
       expect(() => decode('a: 1\n\t# not a comment')).toThrow(ToonDecodingError);
@@ -991,6 +982,15 @@ describe('TOON v4.4 conformance (release v4.4.0)', () => {
     it('counts a tab in the indentation as one level (recovery 3)', () => {
       expect(decodeLax('a:\n\tb: 1')).toEqual({ a: { b: 1 } });
       expect(() => decode('a:\n\tb: 1')).toThrow(ToonDecodingError);
+    });
+
+    it('floors indentation that is not a multiple of the indent size (recovery 3)', () => {
+      expect(decodeLax('user:\n   name: Alice')).toEqual({ user: { name: 'Alice' } });
+      expect(() => decode('user:\n   name: Alice')).toThrow(ToonDecodingError);
+    });
+
+    it('treats a line of only spaces and tabs as blank (recovery 3)', () => {
+      expect(decodeLax('a: 1\n \t \nb: 2')).toEqual({ a: 1, b: 2 });
     });
 
     it('does not treat a tab-indented "#" line as a comment (recovery 3)', () => {
