@@ -570,6 +570,61 @@ describe('ToonEncoder', () => {
       // depending on isIdentifierSegment implementation
       expect(result).toContain('parent:');
     });
+
+    describe('literal dotted keys', () => {
+      const fold = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe' });
+      const off = new ToonEncoder(defaultOptions);
+
+      it('quotes a literal dotted key of a nested object', () => {
+        const input = { x: { 'c.d': 1 }, y: 1 };
+        expect(fold.encode(input)).toBe('x:\n  "c.d": 1\ny: 1');
+        expect(off.encode(input)).toBe('x:\n  c.d: 1\ny: 1');
+      });
+
+      it('quotes a literal dotted root key and header key', () => {
+        expect(fold.encode({ 'c.d': 1 })).toBe('"c.d": 1');
+        expect(fold.encode({ 'k.l': [1, 2] })).toBe('"k.l"[2]: 1,2');
+        expect(off.encode({ 'k.l': [1, 2] })).toBe('k.l[2]: 1,2');
+      });
+
+      it('quotes keyed table entry keys and field names', () => {
+        const entries = { t: { 'a.b': { x: 1 }, 'c.e': { x: 2 } } };
+        expect(fold.encode(entries)).toBe('t[2:]{x}:\n  "a.b": 1\n  "c.e": 2');
+        expect(off.encode(entries)).toBe('t[2:]{x}:\n  a.b: 1\n  c.e: 2');
+
+        const fields = { t: { r1: { 'p.q': 1, z: 1 }, r2: { 'p.q': 2, z: 2 } } };
+        expect(fold.encode(fields)).toBe('t[2:]{"p.q",z}:\n  r1: 1,1\n  r2: 2,2');
+        expect(off.encode(fields)).toBe('t[2:]{p.q,z}:\n  r1: 1,1\n  r2: 2,2');
+      });
+
+      it('quotes a literal key inside the leaf of a folded chain', () => {
+        expect(fold.encode({ a: { b: { 'c.d': 1, e: 1 } } })).toBe(
+          'a.b:\n  "c.d": 1\n  e: 1',
+        );
+      });
+
+      it('leaves folded keys unquoted', () => {
+        expect(fold.encode({ a: { b: { c: 1 } } })).toBe('a.b.c: 1');
+      });
+
+      it('leaves dotted keys inside arrays unquoted', () => {
+        expect(fold.encode({ arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] })).toBe(
+          'arr[2]:\n  - c.d: 1\n    e: 2\n  - f: 1',
+        );
+      });
+
+      it('leaves dotted keys that expansion would not split unquoted', () => {
+        expect(fold.encode({ x: { 'a..b': 1, 'x.1': 2 } })).toBe('x:\n  a..b: 1\n  x.1: 2');
+      });
+
+      it('writes a keyed table in nested form when a field is literal in one entry and folded in another', () => {
+        const input = { t: { r1: { 'p.q': 1 }, r2: { p: { q: 2 } } } };
+        const text = fold.encode(input);
+        expect(text).not.toContain('[2:]');
+        expect(text).toContain('"p.q": 1');
+        expect(text).toContain('p.q: 2');
+      });
+    });
   });
 
   describe('indentation', () => {

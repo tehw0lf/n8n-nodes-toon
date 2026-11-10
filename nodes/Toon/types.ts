@@ -59,6 +59,11 @@ export interface FieldEntry {
   name: string;
   /** Nested field group, or null for a leaf field */
   children: FieldEntry[] | null;
+  /**
+   * The name is written quoted. Set by the decoder for a quoted name, and by
+   * the encoder for a name it must quote so that path expansion keeps it literal.
+   */
+  quoted?: boolean;
 }
 
 // Parsed header information lives in ToonUtils as `ParsedHeader`, alongside
