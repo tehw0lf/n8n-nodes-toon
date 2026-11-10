@@ -892,15 +892,10 @@ export class ToonDecoder {
         this.deepSet(result, segments, value);
       } else {
         // Recursively expand nested objects
-        if (utils.isPlainObject(value)) {
-          utils.setDecodedKey(
-            result,
-            key,
-            this.expandPaths(value as Record<string, unknown>),
-          );
-        } else {
-          utils.setDecodedKey(result, key, value);
-        }
+        const expanded = utils.isPlainObject(value)
+          ? this.expandPaths(value as Record<string, unknown>)
+          : value;
+        this.assignExpanded(result, key, expanded, key);
       }
     }
 
@@ -937,7 +932,7 @@ export class ToonDecoder {
         // Conflict: need object but found non-object
         if (this.options.strict) {
           throw new ToonDecodingError(
-            `Path expansion conflict at '${path.slice(0, i + 1).join('.')}': expected object, found ${typeof current[segment]}`,
+            `Path expansion conflict at '${path.slice(0, i + 1).join('.')}': cannot combine ${this.describeKind(current[segment])} with object`,
           );
         }
         // LWW: overwrite
@@ -957,15 +952,60 @@ export class ToonDecoder {
       );
     }
 
-    if (
-      Object.prototype.hasOwnProperty.call(current, lastSegment) &&
-      this.options.strict
-    ) {
+    this.assignExpanded(current, lastSegment, value, path.join('.'));
+  }
+
+  /**
+   * Store a value at a key of a target object while expanding paths. Used for
+   * literal keys and for the final segment of a dotted path: two plain objects
+   * merge key by key whichever comes first, and any other overlap on an existing
+   * own key is a conflict (an error in strict mode in either order; in
+   * non-strict mode the later line wins, keeping the position of the first
+   * occurrence).
+   */
+  private assignExpanded(
+    target: Record<string, unknown>,
+    key: string,
+    value: unknown,
+    dottedPath: string,
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+      utils.setDecodedKey(target, key, value);
+      return;
+    }
+
+    const existing = target[key];
+
+    if (utils.isPlainObject(existing) && utils.isPlainObject(value)) {
+      const incoming = value as Record<string, unknown>;
+      for (const childKey of Object.keys(incoming)) {
+        this.assignExpanded(
+          existing as Record<string, unknown>,
+          childKey,
+          incoming[childKey],
+          `${dottedPath}.${childKey}`,
+        );
+      }
+      return;
+    }
+
+    if (this.options.strict) {
       throw new ToonDecodingError(
-        `Path expansion conflict: duplicate key '${path.join('.')}'`,
+        `Path expansion conflict at '${dottedPath}': cannot combine ${this.describeKind(existing)} with ${this.describeKind(value)}`,
       );
     }
 
-    current[lastSegment] = value;
+    // LWW: overwrite in place
+    utils.setDecodedKey(target, key, value);
+  }
+
+  private describeKind(value: unknown): string {
+    if (Array.isArray(value)) {
+      return 'array';
+    }
+    if (value === null) {
+      return 'null';
+    }
+    return typeof value;
   }
 }

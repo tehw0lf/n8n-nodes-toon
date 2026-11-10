@@ -424,6 +424,8 @@ user.email: alice@example.com
 }
 ```
 
+When a literal key and an expanded path meet at the same key, two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
+
 ### Round-Trip Guarantees
 
 TOON guarantees lossless round-trip conversion:

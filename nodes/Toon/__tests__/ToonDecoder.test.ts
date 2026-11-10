@@ -421,7 +421,68 @@ describe('ToonDecoder', () => {
         const decoder = new ToonDecoder(strictOptions);
         const toon = 'a:\n  b: 2\na.b: 1';
         expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
-        expect(() => decoder.decode(toon)).toThrow(/duplicate key 'a\.b'/);
+        expect(() => decoder.decode(toon)).toThrow(/Path expansion conflict at 'a\.b'/);
+      });
+    });
+
+    describe('key order independence', () => {
+      const strictOptions: DecoderOptions = { ...expandOptions, strict: true };
+      const decodeWith = (options: DecoderOptions, toon: string): unknown =>
+        new ToonDecoder(options).decode(toon);
+
+      it('should reject an object overwritten by a literal primitive in both orders (strict)', () => {
+        expect(() => decodeWith(strictOptions, 'a: 2\na.b: 1')).toThrow(
+          /Path expansion conflict at 'a'/,
+        );
+        expect(() => decodeWith(strictOptions, 'a.b: 1\na: 2')).toThrow(
+          /Path expansion conflict at 'a'/,
+        );
+      });
+
+      it('should reject a primitive leaf overwritten by a literal object in both orders (strict)', () => {
+        expect(() => decodeWith(strictOptions, 'a:\n  b: 2\na.b: 1')).toThrow(
+          /Path expansion conflict at 'a\.b'/,
+        );
+        expect(() => decodeWith(strictOptions, 'a.b: 1\na:\n  b: 2')).toThrow(
+          /Path expansion conflict at 'a\.b'/,
+        );
+      });
+
+      it.each([
+        ['a: null\na.b: 1', 'a.b: 1\na: null', 'null'],
+        ['a: 2\na.b: 1', 'a.b: 1\na: 2', 'number'],
+        ['a[1]: 1\na.b: 1', 'a.b: 1\na[1]: 1', 'array'],
+      ])('should use one message wording for both orders (%#)', (literalFirst, pathFirst, kind) => {
+        expect(() => decodeWith(strictOptions, literalFirst)).toThrow(
+          `Path expansion conflict at 'a': cannot combine ${kind} with object`,
+        );
+        expect(() => decodeWith(strictOptions, pathFirst)).toThrow(
+          `Path expansion conflict at 'a': cannot combine object with ${kind}`,
+        );
+      });
+
+      it.each([true, false])('should merge object and expanded path in both orders (strict=%s)', (strict) => {
+        const options = { ...expandOptions, strict };
+        expect(decodeWith(options, 'a:\n  c: 2\na.b: 1')).toEqual({ a: { c: 2, b: 1 } });
+        expect(decodeWith(options, 'a.b: 1\na:\n  c: 2')).toEqual({ a: { b: 1, c: 2 } });
+      });
+
+      it.each([true, false])('should merge an object leaf with an existing object leaf in both orders (strict=%s)', (strict) => {
+        const options = { ...expandOptions, strict };
+        const expected = { a: { b: { c: 1, d: 2 } } };
+        expect(decodeWith(options, 'a.b:\n  c: 1\na.b.d: 2')).toEqual(expected);
+        expect(decodeWith(options, 'a.b.d: 2\na.b:\n  c: 1')).toEqual(expected);
+      });
+
+      it('should let the later line win in non-strict mode in both orders', () => {
+        expect(decodeWith(expandOptions, 'a: 2\na.b: 1')).toEqual({ a: { b: 1 } });
+        expect(decodeWith(expandOptions, 'a.b: 1\na: 2')).toEqual({ a: 2 });
+      });
+
+      it('should keep the position of the first occurrence in non-strict mode', () => {
+        const result = decodeWith(expandOptions, 'x.y: 1\na: 1\nx: 3') as Record<string, unknown>;
+        expect(Object.keys(result)).toEqual(['x', 'a']);
+        expect(result.x).toBe(3);
       });
     });
 

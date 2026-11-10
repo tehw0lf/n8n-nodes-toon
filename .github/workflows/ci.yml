@@ -18,6 +18,7 @@ jobs:
       id-token: write
       security-events: write
       pull-requests: write
+      issues: write
     with:
       tool: "npm"
       lint: "run lint"
