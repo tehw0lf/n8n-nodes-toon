@@ -235,24 +235,23 @@ gh workflow run monitor-spec.yml
 
 ### Security Monitoring
 
-An automated workflow performs comprehensive security scanning:
+An automated workflow scans the source and the build artifacts for known vulnerabilities:
 
-**Workflow:** `.github/workflows/security-scan.yml`
+**Workflow:** `.github/workflows/security-scan.yml` (shown as "Security Monitoring" in the Actions UI). It calls the reusable workflows `security-scan-source.yml` and `security-scan-artifacts.yml` from `tehw0lf/workflows` directly; it does not build or publish anything.
 
-**Schedule:** Daily at 2:00 AM UTC (also on dependency changes)
+**Triggers:** Daily at 2:00 AM UTC (`schedule`) and manually (`workflow_dispatch`). There is no trigger on dependency changes.
 
 **Security Checks:**
-- **Source Code:** Semgrep analysis (OWASP Top 10, security-audit, CI rules)
-- **Dependencies:** npm audit for known vulnerabilities
-- **Artifacts:** Trivy scanning on built packages
-- **Published Package:** npm audit on the live published package
+- **Source Code:** Semgrep with the rule sets `auto`, `p/security-audit`, `p/owasp-top-ten`, `p/ci`, `p/nodejs` and `p/typescript`
+- **Dependencies:** `npm audit` on production dependencies only (dev dependencies are omitted), failing at severity `critical`
+- **Artifacts:** Trivy and Grype (medium severity and above) on the artifact downloaded from the latest successful `ci.yml` run, which is downloaded rather than rebuilt. The download job asks for an artifact named `dist` and only warns when none is found, and the artifact scan skips Trivy and Grype when it finds no artifact to scan, so a run without a matching artifact passes without scanning anything (tracked in #97)
 
 **Behavior:**
-- Reuses the comprehensive `build-test-publish` workflow for security scanning
-- Checks the published npm package for newly disclosed vulnerabilities
-- Creates GitHub issues with severity levels and remediation guidance
-- Updates existing security issues instead of creating duplicates
-- Non-blocking (exit code 0) to ensure full scan completion
+- The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings when an artifact is scanned
+- On scheduled and manual runs, a failed source scan opens one issue titled "Scheduled source security scan failed" in this repository, updates it on later failures and closes it when a later run passes (`open_failure_issue`, enabled by default in the reusable workflow and not set by the caller)
+- On scheduled and manual runs, when `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened, or an already open one from the same fix branch is updated (`enable_npm_audit_autofix`, enabled by default and not set by the caller)
+- The `scan_source` job needs the `issues: write` permission for the failure issue; the caller grants it
+- The reusable workflows are referenced at `@main`, so their further behavior is defined in `tehw0lf/workflows`
 
 **Manual Trigger:**
 ```bash
@@ -260,8 +259,6 @@ An automated workflow performs comprehensive security scanning:
 # Or via gh CLI:
 gh workflow run security-scan.yml
 ```
-
-**Issue Labels:** `security`, `vulnerability`, `dependencies`
 
 ## Resources
 

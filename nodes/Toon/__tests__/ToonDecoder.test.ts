@@ -461,6 +461,18 @@ describe('ToonDecoder', () => {
         );
       });
 
+      it('should treat two conflicting expanded paths like a literal key conflict', () => {
+        const nonStrictOptions: DecoderOptions = { ...expandOptions, strict: false };
+        expect(() => decodeWith(strictOptions, 'a.b: 1\na.b.c: 2')).toThrow(
+          /Path expansion conflict at 'a\.b'/,
+        );
+        expect(() => decodeWith(strictOptions, 'a.b.c: 2\na.b: 1')).toThrow(
+          /Path expansion conflict at 'a\.b'/,
+        );
+        expect(decodeWith(nonStrictOptions, 'a.b: 1\na.b.c: 2')).toEqual({ a: { b: { c: 2 } } });
+        expect(decodeWith(nonStrictOptions, 'a.b.c: 2\na.b: 1')).toEqual({ a: { b: 1 } });
+      });
+
       it.each([true, false])('should merge object and expanded path in both orders (strict=%s)', (strict) => {
         const options = { ...expandOptions, strict };
         expect(decodeWith(options, 'a:\n  c: 2\na.b: 1')).toEqual({ a: { c: 2, b: 1 } });

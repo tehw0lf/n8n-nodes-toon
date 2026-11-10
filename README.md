@@ -395,7 +395,7 @@ When enabled (default), the decoder validates:
 - Indentation multiples match expected indent size
 - Proper structure and syntax
 
-Disabling strict mode does not make the decoder lenient in general: every error condition of the specification still applies. Non-strict mode only applies these five recoveries (§14.4):
+Disabling strict mode does not make the decoder lenient in general: every error condition of the specification still applies. Non-strict mode only applies the specification's five recoveries (§14.4):
 - Count mismatches (declared length versus actual items, rows, or entries) are ignored
 - Duplicate keys at the same depth, and duplicate field names in a header, resolve by last-write-wins
 - A tab in the indentation counts as one level
@@ -403,6 +403,8 @@ Disabling strict mode does not make the decoder lenient in general: every error 
 - A first line indented deeper than expected sets the scope's depth (a later line between the two depths is still an error)
 
 Malformed headers, row width mismatches, over-indented lines, a first line indented at the root and trailing content after a root form are errors in both modes.
+
+The non-spec `expandPaths` option adds one further non-strict recovery: when two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths) and are not two objects (which merge), strict mode reports an error and non-strict mode resolves the conflict by last-write-wins, keeping the position of the key's first occurrence. See [Path Expansion](#path-expansion).
 
 ### Path Expansion
 
@@ -424,7 +426,7 @@ user.email: alice@example.com
 }
 ```
 
-When a literal key and an expanded path meet at the same key, two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
+When two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths), two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
 
 Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys.
 
@@ -458,7 +460,7 @@ This node has **zero production dependencies**:
 
 **Cause:** TOON data doesn't match expected structure.
 
-**Solution:** Fix the TOON data. Disabling strict mode only relaxes count mismatches and the other recoveries listed under [Strict Mode](#strict-mode); every other error still applies.
+**Solution:** Fix the TOON data. Disabling strict mode only relaxes count mismatches and the other recoveries listed under [Strict Mode](#strict-mode) (including the Path Expansion conflict recovery); every other error still applies.
 
 ### Issue: Key folding conflicts
 
