@@ -404,7 +404,7 @@ Disabling strict mode does not make the decoder lenient in general: every error 
 
 Malformed headers, row width mismatches, over-indented lines, a first line indented at the root and trailing content after a root form are errors in both modes.
 
-The non-spec `expandPaths` option adds one further non-strict recovery: when a literal key and an expanded path meet and are not two objects (which merge), strict mode reports an error and non-strict mode resolves the conflict by last-write-wins, keeping the position of the key's first occurrence. See [Path Expansion](#path-expansion).
+The non-spec `expandPaths` option adds one further non-strict recovery: when two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths) and are not two objects (which merge), strict mode reports an error and non-strict mode resolves the conflict by last-write-wins, keeping the position of the key's first occurrence. See [Path Expansion](#path-expansion).
 
 ### Path Expansion
 
@@ -426,7 +426,7 @@ user.email: alice@example.com
 }
 ```
 
-When a literal key and an expanded path meet at the same key, two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
+When two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths), two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
 
 ### Round-Trip Guarantees
 
