@@ -270,6 +270,25 @@ describe('Integration Tests', () => {
   });
 
   describe('Round-trip: JSON → TOON → JSON with key folding/expansion', () => {
+    it('should round-trip chains folded inside the leaf of a folded chain', () => {
+      const original = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      const encoder = new ToonEncoder({
+        indent: 2,
+        delimiter: ',',
+        keyFolding: 'safe',
+        flattenDepth: 999,
+      });
+      const decoder = new ToonDecoder({
+        indent: 2,
+        strict: true,
+        expandPaths: 'safe',
+      });
+
+      const toon = encoder.encode(original);
+      expect(toon).toContain('c.d: 1');
+      expect(decoder.decode(toon)).toEqual(original);
+    });
+
     it('should work with key folding and path expansion', () => {
       const original = {
         level1: {

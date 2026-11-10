@@ -476,10 +476,17 @@ export class ToonEncoder {
       const chain = this.extractFoldableChain(key, value, maxDepth);
 
       if (chain.length > 1 && this.isChainSafe(chain)) {
-        // Fold the chain
+        // Fold the chain. A leaf object with several keys is folded
+        // recursively like any other object; a single-key leaf is the
+        // remainder of a chain cut by flattenDepth and stays nested.
         const foldedKey = chain.join('.');
         const leafValue = this.getLeafValue(value, chain.length - 1);
-        utils.setDecodedKey(result, foldedKey, leafValue);
+        const foldedLeaf =
+          utils.isPlainObject(leafValue) &&
+          Object.keys(leafValue as Record<string, unknown>).length > 1
+            ? this.foldKeys(leafValue as Record<string, unknown>)
+            : leafValue;
+        utils.setDecodedKey(result, foldedKey, foldedLeaf);
       } else {
         // Keep as-is, but recursively fold nested objects
         if (utils.isPlainObject(value)) {

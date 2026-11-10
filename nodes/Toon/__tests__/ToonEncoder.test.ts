@@ -556,6 +556,24 @@ describe('ToonEncoder', () => {
       expect(result).toContain('    d: deep');
     });
 
+    it('should fold chains inside the multi-key leaf of a folded chain', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d: 1\n  e.f: 2');
+    });
+
+    it('should fold inside the multi-key leaf when the chain reached flattenDepth', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d: 1\n  e.f: 2');
+    });
+
+    it('should fold nested chains ending in another multi-key object', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { c: { d: { x: 1, y: 2 } }, e: 3 } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d:\n    x: 1\n    y: 2\n  e: 3');
+    });
+
     it('should not fold keys with unsafe characters', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe' });
       const input = {
