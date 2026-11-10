@@ -428,6 +428,8 @@ user.email: alice@example.com
 
 When two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths), two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
 
+Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys.
+
 ### Round-Trip Guarantees
 
 TOON guarantees lossless round-trip conversion:

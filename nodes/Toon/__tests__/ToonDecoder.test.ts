@@ -555,6 +555,58 @@ describe('ToonDecoder', () => {
         },
       });
     });
+
+    describe('nested dotted keys under an expanded key', () => {
+      const strictOptions: DecoderOptions = { ...expandOptions, strict: true };
+
+      it.each([false, true])(
+        'should expand a dotted key inside the value of a dotted key (strict: %s)',
+        (strict) => {
+          const decoder = new ToonDecoder({ ...expandOptions, strict });
+          const result = decoder.decode('a.b:\n  c.d: 1');
+          expect(result).toEqual({ a: { b: { c: { d: 1 } } } });
+          expect(result).toEqual(decoder.decode('a:\n  b:\n    c.d: 1'));
+        },
+      );
+
+      it('should expand dotted keys at a deeper level', () => {
+        const decoder = new ToonDecoder(strictOptions);
+        expect(decoder.decode('a.b:\n  c:\n    d.e: 1')).toEqual({
+          a: { b: { c: { d: { e: 1 } } } },
+        });
+      });
+
+      it.each([
+        'a.b:\n  c.d: 1\na.b.c:\n  e: 2',
+        'a.b.c:\n  e: 2\na.b:\n  c.d: 1',
+      ])('should merge with a sibling expanded path: %j', (toon) => {
+        const decoder = new ToonDecoder(strictOptions);
+        expect(decoder.decode(toon)).toEqual({
+          a: { b: { c: { d: 1, e: 2 } } },
+        });
+      });
+
+      it.each(['a.b:\n  c.d: 1\na.b.c: 3', 'a.b.c: 3\na.b:\n  c.d: 1'])(
+        'should report a conflict in strict mode: %j',
+        (toon) => {
+          const decoder = new ToonDecoder(strictOptions);
+          expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+          expect(() => decoder.decode(toon)).toThrow(
+            /Path expansion conflict at 'a\.b\.c'/,
+          );
+        },
+      );
+
+      it('should let the later line win in non-strict mode', () => {
+        const decoder = new ToonDecoder(expandOptions);
+        expect(decoder.decode('a.b:\n  c.d: 1\na.b.c: 3')).toEqual({
+          a: { b: { c: 3 } },
+        });
+        expect(decoder.decode('a.b.c: 3\na.b:\n  c.d: 1')).toEqual({
+          a: { b: { c: { d: 1 } } },
+        });
+      });
+    });
   });
 
   describe('leading zeros (§4 v3.0.3)', () => {
