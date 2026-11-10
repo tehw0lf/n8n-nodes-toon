@@ -881,21 +881,24 @@ export class ToonDecoder {
   }
 
   /**
-   * Expand dotted paths into nested objects (optional feature)
+   * Expand dotted paths into nested objects (optional feature).
+   * Plain-object values are expanded recursively, under literal and under
+   * dotted keys alike; arrays are not recursed into.
    */
   private expandPaths(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
+    // Recursively expand nested objects
+    const expandValue = (value: unknown): unknown =>
+      utils.isPlainObject(value)
+        ? this.expandPaths(value as Record<string, unknown>)
+        : value;
 
     for (const [key, value] of Object.entries(obj)) {
       if (key.includes('.') && this.isExpandable(key)) {
         const segments = key.split('.');
-        this.deepSet(result, segments, value);
+        this.deepSet(result, segments, expandValue(value));
       } else {
-        // Recursively expand nested objects
-        const expanded = utils.isPlainObject(value)
-          ? this.expandPaths(value as Record<string, unknown>)
-          : value;
-        this.assignExpanded(result, key, expanded, key);
+        this.assignExpanded(result, key, expandValue(value), key);
       }
     }
 
