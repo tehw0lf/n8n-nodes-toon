@@ -35,6 +35,7 @@ jobs:
       security-events: write
       actions: read
       pull-requests: write
+      issues: write
     with:
       tool: "npm"
       semgrep_rules: "auto p/security-audit p/owasp-top-ten p/ci p/nodejs p/typescript"
