@@ -452,12 +452,13 @@ describe('ToonDecoder', () => {
         ['a: null\na.b: 1', 'a.b: 1\na: null', 'null'],
         ['a: 2\na.b: 1', 'a.b: 1\na: 2', 'number'],
         ['a[1]: 1\na.b: 1', 'a.b: 1\na[1]: 1', 'array'],
-      ])('should use one message for both orders (%#)', (first, second, kind) => {
-        const forward = /Path expansion conflict at 'a': cannot combine/;
-        expect(() => decodeWith(strictOptions, first)).toThrow(forward);
-        expect(() => decodeWith(strictOptions, second)).toThrow(forward);
-        expect(() => decodeWith(strictOptions, first)).toThrow(new RegExp(`${kind}`));
-        expect(() => decodeWith(strictOptions, second)).toThrow(new RegExp(`${kind}`));
+      ])('should use one message wording for both orders (%#)', (literalFirst, pathFirst, kind) => {
+        expect(() => decodeWith(strictOptions, literalFirst)).toThrow(
+          `Path expansion conflict at 'a': cannot combine ${kind} with object`,
+        );
+        expect(() => decodeWith(strictOptions, pathFirst)).toThrow(
+          `Path expansion conflict at 'a': cannot combine object with ${kind}`,
+        );
       });
 
       it.each([true, false])('should merge object and expanded path in both orders (strict=%s)', (strict) => {
