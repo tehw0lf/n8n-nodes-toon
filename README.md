@@ -67,9 +67,9 @@ Follow the [n8n community nodes installation guide](https://docs.n8n.io/integrat
 npm install @tehw0lf/n8n-nodes-toon
 ```
 
-### Self-hosted n8n (Community Nodes UI)
+### n8n Cloud
 
-This node is not on n8n's verified community node list, so it is **not available on n8n Cloud**. On self-hosted n8n (v0.200+):
+In n8n Cloud or self-hosted n8n (v0.200+):
 
 1. Go to **Settings** → **Community Nodes**
 2. Select **Install**
