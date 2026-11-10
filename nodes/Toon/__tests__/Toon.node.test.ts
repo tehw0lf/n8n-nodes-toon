@@ -119,4 +119,10 @@ describe('Toon node strict option description', () => {
     expect(description).toMatch(/Expand Paths/);
     expect(description.endsWith('Every other decode error still applies')).toBe(true);
   });
+
+  it('names the indentation flooring and tab-only blank line recovery', () => {
+    const description = findStrict()?.description ?? '';
+    expect(description).toMatch(/not a multiple of the indent size is rounded down/i);
+    expect(description).toMatch(/lines of only spaces and tabs are blank/i);
+  });
 });
