@@ -496,6 +496,44 @@ describe('ToonEncoder', () => {
   });
 
   describe('key folding', () => {
+    describe('collision with a literal sibling key', () => {
+      const safe = (extra: Partial<EncoderOptions> = {}) =>
+        new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', ...extra });
+
+      it('keeps both values when the literal key comes first', () => {
+        const out = safe().encode({ 'a.b': 1, a: { b: 2 } });
+        expect(out).toBe('"a.b": 1\na:\n  b: 2');
+      });
+
+      it('keeps both values when the chain comes first', () => {
+        const out = safe().encode({ a: { b: 2 }, 'a.b': 1 });
+        expect(out).toBe('a:\n  b: 2\n"a.b": 1');
+      });
+
+      it('applies inside a nested object', () => {
+        const out = safe().encode({ x: { 'a.b': 1, a: { b: 2 } } });
+        expect(out).toBe('x:\n  "a.b": 1\n  a:\n    b: 2');
+      });
+
+      it('applies to a chain cut by flattenDepth', () => {
+        const out = safe({ flattenDepth: 2 }).encode({
+          'a.b': 1,
+          a: { b: { c: 2 } },
+        });
+        expect(out).toBe('"a.b": 1\na:\n  b.c: 2');
+      });
+
+      it('applies to a full-length chain', () => {
+        const out = safe().encode({ 'a.b.c': 1, a: { b: { c: 2 } } });
+        expect(out).toBe('"a.b.c": 1\na:\n  b.c: 2');
+      });
+
+      it('still folds a chain without a colliding sibling', () => {
+        const out = safe().encode({ 'x.y': 1, a: { b: 2 } });
+        expect(out).toBe('"x.y": 1\na.b: 2');
+      });
+    });
+
     it('should not fold keys when keyFolding is off', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'off' });
       const input = {

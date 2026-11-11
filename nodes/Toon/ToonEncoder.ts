@@ -544,7 +544,10 @@ export class ToonEncoder {
 
   /**
    * Apply key folding (optional feature)
-   * Collapses single-key object chains into dotted paths
+   * Collapses single-key object chains into dotted paths. A chain is left
+   * unfolded (written nested) when its folded key equals a literal key of the
+   * same object (safe-mode collision rule, §13.4 rule 2 of the archived v3.3
+   * spec), so neither value is overwritten.
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
@@ -555,9 +558,13 @@ export class ToonEncoder {
     for (const [key, value] of Object.entries(obj)) {
       const chain = this.extractFoldableChain(key, value, maxDepth);
 
-      if (chain.length > 1 && this.isChainSafe(chain)) {
+      const foldedKey = chain.join('.');
+      if (
+        chain.length > 1 &&
+        this.isChainSafe(chain) &&
+        !Object.prototype.hasOwnProperty.call(obj, foldedKey)
+      ) {
         // Fold the chain
-        const foldedKey = chain.join('.');
         const leafValue = this.getLeafValue(value, chain.length - 1);
         utils.setDecodedKey(result, foldedKey, leafValue);
         folded.add(foldedKey);

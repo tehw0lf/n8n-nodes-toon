@@ -351,7 +351,7 @@ This node implements **TOON Specification v4.4** in full for the decoder and, us
 
 ⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.4 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
 
-- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`). While it is on, a literal key that contains a dot and whose dot-separated segments are all identifiers (such as `c.d`) is written quoted (`"c.d": 1`), so that Path Expansion does not split it. This deviates from §7.3, which leaves such keys unquoted, and applies only while the option is on and only outside arrays.
+- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`). While it is on, a literal key that contains a dot and whose dot-separated segments are all identifiers (such as `c.d`) is written quoted (`"c.d": 1`), so that Path Expansion does not split it. This deviates from §7.3, which leaves such keys unquoted, and applies only while the option is on and only outside arrays. A chain whose folded key equals a literal key of the same object (`{"a.b": 1, "a": {"b": 2}}`) is not folded and is written nested, so both values survive.
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
 
 ### Notes on Encoder Output
@@ -466,7 +466,7 @@ This node has **zero production dependencies**:
 
 **Cause:** Both `user.name` and `user` keys exist in same object.
 
-**Solution:** Use `keyFolding: "safe"` which only folds when safe, or disable key folding.
+**Solution:** With `keyFolding: "safe"` the chain is left unfolded and written nested next to the quoted literal key (`"user.name": 1` / `user:` / `  name: 2`), so neither value is lost. With key folding off, the literal key is written unquoted, so such output must be decoded with Path Expansion off.
 
 ### Issue: Round-trip doesn't match exactly
 
