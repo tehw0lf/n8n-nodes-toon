@@ -466,7 +466,7 @@ This node has **zero production dependencies**:
 
 **Cause:** Both `user.name` and `user` keys exist in same object.
 
-**Solution:** With `keyFolding: "safe"` the chain is left unfolded and written nested next to the quoted literal key (`"user.name": 1` / `user:` / `  name: 2`), so neither value is lost. Disabling key folding also avoids the situation.
+**Solution:** With `keyFolding: "safe"` the chain is left unfolded and written nested next to the quoted literal key (`"user.name": 1` / `user:` / `  name: 2`), so neither value is lost. With key folding off, the literal key is written unquoted, so such output must be decoded with Path Expansion off.
 
 ### Issue: Round-trip doesn't match exactly
 
