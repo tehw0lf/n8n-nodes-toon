@@ -984,6 +984,15 @@ describe('TOON v4.4 conformance (release v4.4.0)', () => {
       expect(() => decode('a:\n\tb: 1')).toThrow(ToonDecodingError);
     });
 
+    it('floors indentation that is not a multiple of the indent size (recovery 3)', () => {
+      expect(decodeLax('user:\n   name: Alice')).toEqual({ user: { name: 'Alice' } });
+      expect(() => decode('user:\n   name: Alice')).toThrow(ToonDecodingError);
+    });
+
+    it('treats a line of only spaces and tabs as blank (recovery 3)', () => {
+      expect(decodeLax('a: 1\n \t \nb: 2')).toEqual({ a: 1, b: 2 });
+    });
+
     it('does not treat a tab-indented "#" line as a comment (recovery 3)', () => {
       expect(decodeLax('items[3]{id}:\n  1\n\t#x\n  2')).toEqual({
         items: [{ id: 1 }, { id: '#x' }, { id: 2 }],

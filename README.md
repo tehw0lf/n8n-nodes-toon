@@ -398,7 +398,7 @@ When enabled (default), the decoder validates:
 Disabling strict mode does not make the decoder lenient in general: every error condition of the specification still applies. Non-strict mode only applies the specification's five recoveries (§14.4):
 - Count mismatches (declared length versus actual items, rows, or entries) are ignored
 - Duplicate keys at the same depth, and duplicate field names in a header, resolve by last-write-wins
-- A tab in the indentation counts as one level
+- Each tab in the indentation counts as one level and spaces count one level per indent size, rounded down (so indentation that is not a multiple of the indent size is accepted); a line of only spaces and tabs counts as blank
 - Blank lines inside an array's rows, items, or entries are ignored
 - A first line indented deeper than expected sets the scope's depth (a later line between the two depths is still an error)
 
