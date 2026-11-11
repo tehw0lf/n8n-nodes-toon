@@ -11,6 +11,17 @@ export class ToonEncoder {
   private options: EncoderOptions;
   private documentDelimiter: Delimiter;
 
+  /** Per object, the keys that `foldKeys` produced by folding a chain */
+  private foldedKeys = new WeakMap<object, Set<string>>();
+
+  /**
+   * Per object, the literal keys that path expansion would split, so they are
+   * written quoted. Filled only while key folding is on, and only for objects
+   * reachable from the root through plain objects, which are the ones a
+   * decoder expands; arrays and everything below them are left out.
+   */
+  private quotedKeys = new WeakMap<object, Set<string>>();
+
   constructor(options: EncoderOptions) {
     this.options = options;
     this.documentDelimiter = options.delimiter;
@@ -26,11 +37,15 @@ export class ToonEncoder {
     // Reject unrepresentable strings before emitting anything (§3)
     this.assertRepresentable(normalized, '');
 
+    this.foldedKeys = new WeakMap();
+    this.quotedKeys = new WeakMap();
+
     // Apply key folding if enabled
-    const folded =
-      this.options.keyFolding === 'safe' && utils.isPlainObject(normalized)
-        ? this.foldKeys(normalized)
-        : normalized;
+    let folded = normalized;
+    if (this.options.keyFolding === 'safe' && utils.isPlainObject(normalized)) {
+      folded = this.foldKeys(normalized);
+      this.markLiteralDottedKeys(folded as Record<string, unknown>);
+    }
 
     // Join lines without trailing newline per §12
     return this.encodeRoot(folded).join('\n');
@@ -176,6 +191,21 @@ export class ToonEncoder {
   }
 
   /**
+   * Render a key, forced into quotes when `quoted` says path expansion must
+   * keep it literal
+   */
+  private encodeKeyToken(key: string, quoted: boolean): string {
+    return quoted ? `"${utils.escapeString(key)}"` : utils.encodeKey(key);
+  }
+
+  /**
+   * Whether `key` of `owner` is written quoted so that it is not expanded
+   */
+  private isQuotedKey(owner: object | null, key: string): boolean {
+    return owner !== null && this.quotedKeys.get(owner)?.has(key) === true;
+  }
+
+  /**
    * Render a header's bracket segment and optional field list (§6)
    */
   private header(
@@ -183,8 +213,9 @@ export class ToonEncoder {
     length: number,
     fields: FieldEntry[] | null,
     keyed: boolean,
+    keyQuoted = false,
   ): string {
-    const keyPart = key === null ? '' : utils.encodeKey(key);
+    const keyPart = key === null ? '' : this.encodeKeyToken(key, keyQuoted);
     const keyedMarker = keyed ? ':' : '';
     const delimSym = utils.delimiterSymbol(this.documentDelimiter);
     const fieldsPart =
@@ -199,14 +230,14 @@ export class ToonEncoder {
    */
   private encodeObject(obj: Record<string, unknown>, depth: number): string[] {
     // An object whose values are uniform objects becomes a keyed table (§9.5)
-    const keyedFields = utils.getKeyedTabularFields(obj);
+    const keyedFields = this.getKeyedFields(obj);
     if (keyedFields !== null) {
-      return this.encodeKeyedTabular(obj, keyedFields, null, depth);
+      return this.encodeKeyedTabular(obj, keyedFields, null, depth, false);
     }
 
     const lines: string[] = [];
     for (const [key, value] of Object.entries(obj)) {
-      lines.push(...this.encodeField(key, value, depth));
+      lines.push(...this.encodeField(key, value, depth, obj));
     }
     return lines;
   }
@@ -214,25 +245,31 @@ export class ToonEncoder {
   /**
    * Encode a single object field (§8)
    */
-  private encodeField(key: string, value: unknown, depth: number): string[] {
+  private encodeField(
+    key: string,
+    value: unknown,
+    depth: number,
+    owner: object | null = null,
+  ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
-    const encodedKey = utils.encodeKey(key);
+    const quoted = this.isQuotedKey(owner, key);
+    const encodedKey = this.encodeKeyToken(key, quoted);
 
     if (Array.isArray(value)) {
       // Empty arrays in object-field position use the explicit form (§9.1)
       if (value.length === 0) {
         return [`${indentStr}${encodedKey}: []`];
       }
-      return this.encodeArray(value, key, depth);
+      return this.encodeArray(value, key, depth, quoted);
     }
 
     if (utils.isPlainObject(value)) {
       const nested = value as Record<string, unknown>;
 
       // A nested object that qualifies collapses into a keyed table (§9.5)
-      const keyedFields = utils.getKeyedTabularFields(nested);
+      const keyedFields = this.getKeyedFields(nested);
       if (keyedFields !== null) {
-        return this.encodeKeyedTabular(nested, keyedFields, key, depth);
+        return this.encodeKeyedTabular(nested, keyedFields, key, depth, quoted);
       }
 
       // Nested or empty objects: "key:" alone, fields at depth + 1 (§8)
@@ -254,12 +291,15 @@ export class ToonEncoder {
     fields: FieldEntry[],
     key: string | null,
     depth: number,
+    keyQuoted: boolean,
   ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
     const entries = Object.entries(obj);
 
-    const lines = [`${indentStr}${this.header(key, entries.length, fields, true)}`];
-    lines.push(...this.entryRows(entries, fields, depth + 1));
+    const lines = [
+      `${indentStr}${this.header(key, entries.length, fields, true, keyQuoted)}`,
+    ];
+    lines.push(...this.entryRows(obj, fields, depth + 1));
     return lines;
   }
 
@@ -267,49 +307,65 @@ export class ToonEncoder {
    * Render the entry rows of a keyed table at a given depth (§9.5)
    */
   private entryRows(
-    entries: [string, unknown][],
+    obj: Record<string, unknown>,
     fields: FieldEntry[],
     depth: number,
   ): string[] {
     const rowIndent = utils.indent(depth, this.options.indent);
 
-    return entries.map(([entryKey, entryValue]) => {
+    return Object.entries(obj).map(([entryKey, entryValue]) => {
       const cells = utils
         .collectLeafValues(entryValue as Record<string, unknown>, fields)
         .map((cell) => this.encodePrimitive(cell, this.documentDelimiter));
 
-      return `${rowIndent}${utils.encodeKey(entryKey)}: ${cells.join(this.documentDelimiter)}`;
+      return `${rowIndent}${this.encodeKeyToken(entryKey, this.isQuotedKey(obj, entryKey))}: ${cells.join(this.documentDelimiter)}`;
     });
   }
 
   /**
    * Encode an array, selecting the form from its shape per §9
    */
-  private encodeArray(arr: unknown[], key: string | null, depth: number): string[] {
+  private encodeArray(
+    arr: unknown[],
+    key: string | null,
+    depth: number,
+    keyQuoted = false,
+  ): string[] {
     // Tabular form when every column is uniform-primitive or nested-uniform (§9.3)
     const fields = utils.getTabularFields(arr);
     if (fields !== null) {
-      return this.encodeTabular(arr as Record<string, unknown>[], fields, key, depth);
+      return this.encodeTabular(
+        arr as Record<string, unknown>[],
+        fields,
+        key,
+        depth,
+        keyQuoted,
+      );
     }
 
     // Non-empty primitive arrays render inline on the header line (§9.1)
     if (arr.every((item) => utils.isPrimitive(item))) {
-      return this.encodeInlineArray(arr, key, depth);
+      return this.encodeInlineArray(arr, key, depth, keyQuoted);
     }
 
     // Everything else uses list form (§9.2, §9.4)
-    return this.encodeListArray(arr, key, depth);
+    return this.encodeListArray(arr, key, depth, keyQuoted);
   }
 
   /**
    * Encode a primitive array inline per §9.1
    */
-  private encodeInlineArray(arr: unknown[], key: string | null, depth: number): string[] {
+  private encodeInlineArray(
+    arr: unknown[],
+    key: string | null,
+    depth: number,
+    keyQuoted: boolean,
+  ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
     const values = arr.map((item) => this.encodePrimitive(item, this.documentDelimiter));
 
     return [
-      `${indentStr}${this.header(key, arr.length, null, false)} ${values.join(this.documentDelimiter)}`,
+      `${indentStr}${this.header(key, arr.length, null, false, keyQuoted)} ${values.join(this.documentDelimiter)}`,
     ];
   }
 
@@ -321,10 +377,13 @@ export class ToonEncoder {
     fields: FieldEntry[],
     key: string | null,
     depth: number,
+    keyQuoted: boolean,
   ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
 
-    const lines = [`${indentStr}${this.header(key, arr.length, fields, false)}`];
+    const lines = [
+      `${indentStr}${this.header(key, arr.length, fields, false, keyQuoted)}`,
+    ];
     lines.push(...this.tabularRows(arr, fields, depth + 1));
     return lines;
   }
@@ -351,9 +410,16 @@ export class ToonEncoder {
   /**
    * Encode an array in list form per §9.2 and §9.4
    */
-  private encodeListArray(arr: unknown[], key: string | null, depth: number): string[] {
+  private encodeListArray(
+    arr: unknown[],
+    key: string | null,
+    depth: number,
+    keyQuoted: boolean,
+  ): string[] {
     const indentStr = utils.indent(depth, this.options.indent);
-    const lines = [`${indentStr}${this.header(key, arr.length, null, false)}`];
+    const lines = [
+      `${indentStr}${this.header(key, arr.length, null, false, keyQuoted)}`,
+    ];
 
     for (const item of arr) {
       lines.push(...this.encodeListItem(item, depth + 1));
@@ -414,12 +480,12 @@ export class ToonEncoder {
 
     // When the first field is a tabular array or keyed tabular object, its
     // header goes on the hyphen line and its rows sit at depth + 2 (§10)
-    const firstFieldLines = this.encodeListItemFirstField(firstKey, firstValue, depth);
+    const firstFieldLines = this.encodeListItemFirstField(firstKey, firstValue, depth, obj);
     lines.push(...firstFieldLines);
 
     // All other fields appear at depth + 1 under the hyphen line (§10)
     for (const [key, value] of restEntries) {
-      lines.push(...this.encodeField(key, value, depth + 1));
+      lines.push(...this.encodeField(key, value, depth + 1, obj));
     }
 
     return lines;
@@ -428,14 +494,20 @@ export class ToonEncoder {
   /**
    * Encode the first field of a list-item object, carried on the hyphen line (§10)
    */
-  private encodeListItemFirstField(key: string, value: unknown, depth: number): string[] {
+  private encodeListItemFirstField(
+    key: string,
+    value: unknown,
+    depth: number,
+    owner: object,
+  ): string[] {
+    const keyQuoted = this.isQuotedKey(owner, key);
     const marker = `${utils.indent(depth, this.options.indent)}- `;
 
     if (Array.isArray(value) && value.length > 0) {
       const fields = utils.getTabularFields(value);
       if (fields !== null) {
         // Header on the hyphen line, rows at depth + 2 (§10)
-        const header = this.header(key, value.length, fields, false);
+        const header = this.header(key, value.length, fields, false, keyQuoted);
         return [
           `${marker}${header}`,
           ...this.tabularRows(value as Record<string, unknown>[], fields, depth + 2),
@@ -445,20 +517,26 @@ export class ToonEncoder {
 
     if (utils.isPlainObject(value)) {
       const nested = value as Record<string, unknown>;
-      const keyedFields = utils.getKeyedTabularFields(nested);
+      const keyedFields = this.getKeyedFields(nested);
       if (keyedFields !== null) {
         // Keyed header on the hyphen line, entry rows at depth + 2 (§10)
-        const header = this.header(key, Object.keys(nested).length, keyedFields, true);
+        const header = this.header(
+          key,
+          Object.keys(nested).length,
+          keyedFields,
+          true,
+          keyQuoted,
+        );
         return [
           `${marker}${header}`,
-          ...this.entryRows(Object.entries(nested), keyedFields, depth + 2),
+          ...this.entryRows(nested, keyedFields, depth + 2),
         ];
       }
     }
 
     // All other first fields: encode normally, then splice the hyphen marker
     // in place of the leading indentation of the field's first line (§10).
-    const fieldLines = this.encodeField(key, value, depth + 1);
+    const fieldLines = this.encodeField(key, value, depth + 1, owner);
     const indentWidth = (depth + 1) * this.options.indent;
     fieldLines[0] = `${marker}${fieldLines[0].slice(indentWidth)}`;
     return fieldLines;
@@ -470,6 +548,8 @@ export class ToonEncoder {
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
+    const folded = new Set<string>();
+    this.foldedKeys.set(result, folded);
     const maxDepth = this.options.flattenDepth;
 
     for (const [key, value] of Object.entries(obj)) {
@@ -480,7 +560,9 @@ export class ToonEncoder {
         const foldedKey = chain.join('.');
         const leafValue = this.getLeafValue(value, chain.length - 1);
         utils.setDecodedKey(result, foldedKey, leafValue);
+        folded.add(foldedKey);
       } else {
+        folded.delete(key);
         // Keep as-is, but recursively fold nested objects
         if (utils.isPlainObject(value)) {
           utils.setDecodedKey(
@@ -495,6 +577,68 @@ export class ToonEncoder {
     }
 
     return result;
+  }
+
+  /**
+   * Record, for the folded value, which literal keys a decoder would expand:
+   * dotted keys with identifier segments that folding did not produce. Walks
+   * plain objects only, leaf objects of folded chains included.
+   */
+  private markLiteralDottedKeys(obj: Record<string, unknown>): void {
+    const folded = this.foldedKeys.get(obj);
+    let quoted: Set<string> | undefined;
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (utils.isExpandableDottedKey(key) && folded?.has(key) !== true) {
+        quoted ??= new Set();
+        quoted.add(key);
+      }
+      if (utils.isPlainObject(value)) {
+        this.markLiteralDottedKeys(value);
+      }
+    }
+
+    if (quoted !== undefined) {
+      this.quotedKeys.set(obj, quoted);
+    }
+  }
+
+  /**
+   * Keyed tabular field tree of `obj`, with the field names that must be
+   * quoted marked. Null when the object does not qualify, or when a field name
+   * is a literal key in some entries and a folded one in others: one header
+   * cannot carry both meanings, so the object is written in nested form.
+   */
+  private getKeyedFields(obj: Record<string, unknown>): FieldEntry[] | null {
+    const fields = utils.getKeyedTabularFields(obj);
+    if (fields === null) {
+      return null;
+    }
+    const rows = Object.values(obj) as Record<string, unknown>[];
+    return this.markQuotedFields(fields, rows) ? fields : null;
+  }
+
+  /**
+   * Set `quoted` on the fields that every row writes as a quoted key; false
+   * when rows disagree about a field.
+   */
+  private markQuotedFields(fields: FieldEntry[], rows: Record<string, unknown>[]): boolean {
+    for (const field of fields) {
+      const flags = rows.map((row) => this.isQuotedKey(row, field.name));
+      if (flags.some((flag) => flag !== flags[0])) {
+        return false;
+      }
+      if (flags[0]) {
+        field.quoted = true;
+      }
+      if (field.children !== null) {
+        const nested = rows.map((row) => row[field.name] as Record<string, unknown>);
+        if (!this.markQuotedFields(field.children, nested)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   /**

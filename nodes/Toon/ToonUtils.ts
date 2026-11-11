@@ -344,6 +344,14 @@ export function isIdentifierSegment(segment: string): boolean {
 }
 
 /**
+ * Check if a key is a dotted path that path expansion would split: it contains
+ * a dot and every dot-separated segment is an identifier segment (§13.4).
+ */
+export function isExpandableDottedKey(key: string): boolean {
+  return key.includes('.') && key.split('.').every((seg) => isIdentifierSegment(seg));
+}
+
+/**
  * Check if a string is a valid TOON key (allows dots for paths)
  * Must match: ^[A-Za-z_][A-Za-z0-9_.]*$
  */
@@ -529,7 +537,11 @@ export function parseFieldList(body: string, delimiter: Delimiter): FieldEntry[]
     const bracePos = findUnquotedBrace(entry);
 
     if (bracePos < 0) {
-      return { name: decodeFieldName(entry), children: null };
+      return {
+        name: decodeFieldName(entry),
+        children: null,
+        ...(isQuotedToken(entry) ? { quoted: true } : {}),
+      };
     }
 
     if (!entry.endsWith('}')) {
@@ -544,8 +556,19 @@ export function parseFieldList(body: string, delimiter: Delimiter): FieldEntry[]
 
     const name = decodeFieldName(entry.slice(0, bracePos));
     const nested = entry.slice(bracePos + 1, -1);
-    return { name, children: parseFieldList(nested, delimiter) };
+    return {
+      name,
+      children: parseFieldList(nested, delimiter),
+      ...(isQuotedToken(entry.slice(0, bracePos)) ? { quoted: true } : {}),
+    };
   });
+}
+
+/**
+ * Whether a key or field name token is written quoted
+ */
+function isQuotedToken(token: string): boolean {
+  return trimSpaces(token).startsWith('"');
 }
 
 /**
@@ -663,6 +686,8 @@ export function parseToken(token: string): unknown {
  */
 export interface ParsedHeader {
   key: string | null;
+  /** The key is written quoted (always false for a keyless header) */
+  keyQuoted: boolean;
   length: number;
   delimiter: Delimiter;
   fields: FieldEntry[] | null;
@@ -790,6 +815,7 @@ export function parseHeader(
 
   return {
     key,
+    keyQuoted: keyPart.startsWith('"'),
     length,
     delimiter,
     fields,
@@ -1142,7 +1168,8 @@ export function encodeKey(key: string): string {
 export function serializeFields(fields: FieldEntry[], delimiter: Delimiter): string {
   return fields
     .map((field) => {
-      const name = encodeKey(field.name);
+      const name =
+        field.quoted === true ? `"${escapeString(field.name)}"` : encodeKey(field.name);
       return field.children === null
         ? name
         : `${name}{${serializeFields(field.children, delimiter)}}`;

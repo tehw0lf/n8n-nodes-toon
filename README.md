@@ -351,7 +351,7 @@ This node implements **TOON Specification v4.4** in full for the decoder and, us
 
 ⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.4 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
 
-- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
+- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`). While it is on, a literal key that contains a dot and whose dot-separated segments are all identifiers (such as `c.d`) is written quoted (`"c.d": 1`), so that Path Expansion does not split it. This deviates from §7.3, which leaves such keys unquoted, and applies only while the option is on and only outside arrays.
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
 
 ### Notes on Encoder Output
@@ -428,7 +428,7 @@ user.email: alice@example.com
 
 When two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths), two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
 
-Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys.
+Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys. Quoted keys are never expanded: `"c.d": 1` decodes to `{ "c.d": 1 }`, and in non-strict mode the last write of a key decides whether it counts as quoted.
 
 ### Round-Trip Guarantees
 

@@ -331,6 +331,49 @@ describe('Integration Tests', () => {
       const result = decoder.decode(toon);
       expect(result).toEqual(original);
     });
+
+    describe('literal dotted keys', () => {
+      const inputs: Record<string, unknown> = {
+        'nested object': { x: { 'c.d': 1 }, y: 1 },
+        'root key': { 'c.d': 1 },
+        'array header key': { 'k.l': [1, 2] },
+        'keyed table entry keys': { t: { 'a.b': { x: 1 }, 'c.e': { x: 2 } } },
+        'keyed table field names': {
+          t: { r1: { 'p.q': 1, z: 1 }, r2: { 'p.q': 2, z: 2 } },
+        },
+        'leaf of a folded chain': { a: { b: { 'c.d': 1, e: 1 } } },
+        'inside an array': { arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] },
+        'next to a folded key': { 'a.b': 1, c: { d: 2 } },
+        'mixed keyed table': { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } },
+        'mixed keyed table with nested field group': {
+          t: {
+            r1: { p: { 'x.y': 1, w: 1 }, z: 1 },
+            r2: { p: { x: { y: 2 }, w: 2 }, z: 2 },
+          },
+        },
+      };
+
+      for (const [name, original] of Object.entries(inputs)) {
+        for (const strict of [true, false]) {
+          for (const flattenDepth of [Infinity, 2]) {
+            it(`round-trips ${name} (strict ${strict}, flattenDepth ${flattenDepth})`, () => {
+              const toon = new ToonEncoder({
+                indent: 2,
+                delimiter: ',',
+                keyFolding: 'safe',
+                flattenDepth,
+              }).encode(original);
+              const result = new ToonDecoder({
+                indent: 2,
+                strict,
+                expandPaths: 'safe',
+              }).decode(toon);
+              expect(result).toEqual(original);
+            });
+          }
+        }
+      }
+    });
   });
 
   describe('Cross-delimiter conversions', () => {

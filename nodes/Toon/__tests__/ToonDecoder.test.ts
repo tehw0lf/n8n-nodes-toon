@@ -607,6 +607,67 @@ describe('ToonDecoder', () => {
         });
       });
     });
+
+    describe('quoted keys stay literal', () => {
+      const expand = (strict = true): ToonDecoder =>
+        new ToonDecoder({ ...defaultOptions, strict, expandPaths: 'safe' });
+
+      it('keeps a quoted root key', () => {
+        expect(expand().decode('"c.d": 1')).toEqual({ 'c.d': 1 });
+      });
+
+      it('keeps a quoted key of a nested object', () => {
+        expect(expand().decode('x:\n  "c.d": 1\ny: 1')).toEqual({
+          x: { 'c.d': 1 },
+          y: 1,
+        });
+      });
+
+      it('keeps a quoted header key', () => {
+        expect(expand().decode('"k.l"[2]: 1,2')).toEqual({ 'k.l': [1, 2] });
+      });
+
+      it('keeps a quoted entry key and field name of a keyed table', () => {
+        expect(expand().decode('t[2:]{x}:\n  "a.b": 1\n  "c.e": 2')).toEqual({
+          t: { 'a.b': { x: 1 }, 'c.e': { x: 2 } },
+        });
+        expect(expand().decode('t[2:]{"p.q",z}:\n  r1: 1,2\n  r2: 3,4')).toEqual({
+          t: { r1: { 'p.q': 1, z: 2 }, r2: { 'p.q': 3, z: 4 } },
+        });
+      });
+
+      it('keeps a quoted key inside the value of an expanded key', () => {
+        expect(expand().decode('a.b:\n  "c.d": 1')).toEqual({
+          a: { b: { 'c.d': 1 } },
+        });
+      });
+
+      it('keeps a quoted key in a list item object', () => {
+        expect(expand().decode('l[1]:\n  - "c.d": 1\n    "e.f": 2')).toEqual({
+          l: [{ 'c.d': 1, 'e.f': 2 }],
+        });
+      });
+
+      it('keeps a quoted key next to an unquoted dotted key', () => {
+        expect(expand().decode('"a.b": 1\na.c: 2')).toEqual({
+          'a.b': 1,
+          a: { c: 2 },
+        });
+      });
+
+      it('lets the last write decide in non-strict mode', () => {
+        expect(expand(false).decode('"a.b": 1\na.b: 2')).toEqual({ a: { b: 2 } });
+        expect(expand(false).decode('a.b: 1\n"a.b": 2')).toEqual({ 'a.b': 2 });
+      });
+
+      it('still expands unquoted keys and leaves quoted keys alone with expandPaths off', () => {
+        expect(expand().decode('a.b: 1')).toEqual({ a: { b: 1 } });
+        expect(new ToonDecoder(defaultOptions).decode('"a.b": 1\nc.d: 2')).toEqual({
+          'a.b': 1,
+          'c.d': 2,
+        });
+      });
+    });
   });
 
   describe('leading zeros (§4 v3.0.3)', () => {
