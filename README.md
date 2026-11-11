@@ -351,7 +351,7 @@ This node implements **TOON Specification v4.4** in full for the decoder and, us
 
 ⚠️ These two options are **this node's own convenience features, not part of the TOON specification**. v4.4 treats dotted keys as ordinary literal keys with no structural meaning (§8), so output produced with key folding enabled decodes to dotted keys — not nested objects — in any conforming TOON implementation. Both default to `off`; leave them off for interoperable output.
 
-- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`)
+- **Key Folding** (`keyFolding: "safe"`) - Collapse nested single-key objects into dotted paths (e.g., `{a: {b: {c: 1}}}` → `a.b.c: 1`). While it is on, a literal key that contains a dot and whose dot-separated segments are all identifiers (such as `c.d`) is written quoted (`"c.d": 1`), so that Path Expansion does not split it. This deviates from §7.3, which leaves such keys unquoted, and applies only while the option is on and only outside arrays. A chain whose folded key equals a literal key of the same object (`{"a.b": 1, "a": {"b": 2}}`) is not folded and is written nested, so both values survive.
 - **Path Expansion** (`expandPaths: "safe"`) - Expand dotted keys back into nested objects during decoding
 
 ### Notes on Encoder Output
@@ -398,7 +398,7 @@ When enabled (default), the decoder validates:
 Disabling strict mode does not make the decoder lenient in general: every error condition of the specification still applies. Non-strict mode only applies the specification's five recoveries (§14.4):
 - Count mismatches (declared length versus actual items, rows, or entries) are ignored
 - Duplicate keys at the same depth, and duplicate field names in a header, resolve by last-write-wins
-- A tab in the indentation counts as one level
+- Each tab in the indentation counts as one level and spaces count one level per indent size, rounded down (so indentation that is not a multiple of the indent size is accepted); a line of only spaces and tabs counts as blank
 - Blank lines inside an array's rows, items, or entries are ignored
 - A first line indented deeper than expected sets the scope's depth (a later line between the two depths is still an error)
 
@@ -428,7 +428,7 @@ user.email: alice@example.com
 
 When two keys meet at the same key during path expansion (a literal key and an expanded path, or two expanded paths), two objects are merged, whichever line comes first. Any other overlap is an error in strict mode, whichever line comes first, and in non-strict mode the later line wins (the key keeps the position of its first occurrence).
 
-Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys.
+Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys. Quoted keys are never expanded: `"c.d": 1` decodes to `{ "c.d": 1 }`, and in non-strict mode the last write of a key decides whether it counts as quoted.
 
 ### Round-Trip Guarantees
 
@@ -466,7 +466,7 @@ This node has **zero production dependencies**:
 
 **Cause:** Both `user.name` and `user` keys exist in same object.
 
-**Solution:** Use `keyFolding: "safe"` which only folds when safe, or disable key folding.
+**Solution:** With `keyFolding: "safe"` the chain is left unfolded and written nested next to the quoted literal key (`"user.name": 1` / `user:` / `  name: 2`), so neither value is lost. With key folding off, the literal key is written unquoted, so such output must be decoded with Path Expansion off.
 
 ### Issue: Round-trip doesn't match exactly
 
@@ -497,21 +497,18 @@ See [`.github/workflows/monitor-spec.yml`](.github/workflows/monitor-spec.yml) f
 
 ### Security Monitoring
 
-Performs comprehensive security scanning to detect vulnerabilities:
+Scans the source and the build artifacts for known vulnerabilities. The workflow calls the reusable workflows `security-scan-source.yml` and `security-scan-artifacts.yml` from `tehw0lf/workflows` and does not build or publish anything:
 
-- **Frequency:** Runs daily at 2:00 AM UTC
-- **Source Code Scanning:** Semgrep analysis for security issues (OWASP Top 10, etc.)
-- **Dependency Scanning:** npm audit on dependencies
-- **Published Package Scanning:** Checks the live npm package for newly disclosed vulnerabilities
-- **Automatic Trigger:** Also runs on changes to `package.json` or `package-lock.json`
+- **Frequency:** Runs daily at 2:00 AM UTC and can be triggered manually via GitHub Actions; there is no trigger on dependency changes
+- **Source Code Scanning:** Semgrep with the `auto`, `p/security-audit`, `p/owasp-top-ten`, `p/ci`, `p/nodejs` and `p/typescript` rule sets
+- **Dependency Scanning:** `npm audit` on production dependencies, failing at severity `critical`
+- **Artifact Scanning:** Trivy and Grype on the `build` artifact of the latest successful CI run triggered by a push to `main` (downloaded, not rebuilt); the run fails when no such artifact exists
 
-When vulnerabilities are detected, the workflow:
-1. Creates a labeled issue (`security`, `vulnerability`, `dependencies`)
-2. Includes severity levels and full audit report
-3. Provides remediation guidance with specific commands
-4. Updates existing issues instead of creating duplicates
+On failure of a scheduled or manual run:
+1. A failed source scan opens one issue in this repository, updates it on later failures and closes it when a later run passes
+2. When `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened or updated
 
-See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) for implementation details.
+See [DEVELOPMENT.md](DEVELOPMENT.md#security-monitoring) for the full behavior and [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) for implementation details.
 
 ## Resources
 

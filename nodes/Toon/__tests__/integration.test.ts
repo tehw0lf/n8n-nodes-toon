@@ -289,6 +289,70 @@ describe('Integration Tests', () => {
       expect(decoder.decode(toon)).toEqual(original);
     });
 
+    describe('literal dotted key colliding with a chain inside a folded leaf', () => {
+      const inputs = [
+        { a: { b: { 'c.d': 5, c: { d: 1 } } } },
+        { a: { b: { c: { d: 1 }, 'c.d': 5 } } },
+      ];
+      // expandPaths 'off' keeps a folded key literal, so only 'safe' round-trips
+      for (const strict of [true, false]) {
+        it(`keeps both values in both key orders (strict ${strict})`, () => {
+          const encoder = new ToonEncoder({
+            indent: 2,
+            delimiter: ',',
+            keyFolding: 'safe',
+            flattenDepth: 999,
+          });
+          const decoder = new ToonDecoder({ indent: 2, strict, expandPaths: 'safe' });
+          for (const input of inputs) {
+            expect(decoder.decode(encoder.encode(input))).toEqual(input);
+          }
+        });
+      }
+    });
+
+    it('should fold inside a leaf whose only key is unsafe and round-trip it', () => {
+      const original = { a: { b: { constructor: { p: { q: 1 } } } } };
+      const encoder = new ToonEncoder({
+        indent: 2,
+        delimiter: ',',
+        keyFolding: 'safe',
+        flattenDepth: 999,
+      });
+      const decoder = new ToonDecoder({
+        indent: 2,
+        strict: true,
+        expandPaths: 'safe',
+      });
+
+      const toon = encoder.encode(original);
+      expect(toon).toContain('p.q: 1');
+      expect(decoder.decode(toon)).toEqual(original);
+    });
+
+    describe('literal dotted key colliding with a folded chain', () => {
+      const inputs = [
+        { 'a.b': 1, a: { b: 2 } },
+        { a: { b: 2 }, 'a.b': 1 },
+      ];
+      for (const expandPaths of ['safe', 'off'] as const) {
+        for (const strict of [true, false]) {
+          it(`round-trips both key orders (expandPaths ${expandPaths}, strict ${strict})`, () => {
+            const encoder = new ToonEncoder({
+              indent: 2,
+              delimiter: ',',
+              keyFolding: 'safe',
+              flattenDepth: 999,
+            });
+            const decoder = new ToonDecoder({ indent: 2, strict, expandPaths });
+            for (const input of inputs) {
+              expect(decoder.decode(encoder.encode(input))).toEqual(input);
+            }
+          });
+        }
+      }
+    });
+
     it('should work with key folding and path expansion', () => {
       const original = {
         level1: {
@@ -349,6 +413,49 @@ describe('Integration Tests', () => {
 
       const result = decoder.decode(toon);
       expect(result).toEqual(original);
+    });
+
+    describe('literal dotted keys', () => {
+      const inputs: Record<string, unknown> = {
+        'nested object': { x: { 'c.d': 1 }, y: 1 },
+        'root key': { 'c.d': 1 },
+        'array header key': { 'k.l': [1, 2] },
+        'keyed table entry keys': { t: { 'a.b': { x: 1 }, 'c.e': { x: 2 } } },
+        'keyed table field names': {
+          t: { r1: { 'p.q': 1, z: 1 }, r2: { 'p.q': 2, z: 2 } },
+        },
+        'leaf of a folded chain': { a: { b: { 'c.d': 1, e: 1 } } },
+        'inside an array': { arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] },
+        'next to a folded key': { 'a.b': 1, c: { d: 2 } },
+        'mixed keyed table': { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } },
+        'mixed keyed table with nested field group': {
+          t: {
+            r1: { p: { 'x.y': 1, w: 1 }, z: 1 },
+            r2: { p: { x: { y: 2 }, w: 2 }, z: 2 },
+          },
+        },
+      };
+
+      for (const [name, original] of Object.entries(inputs)) {
+        for (const strict of [true, false]) {
+          for (const flattenDepth of [Infinity, 2]) {
+            it(`round-trips ${name} (strict ${strict}, flattenDepth ${flattenDepth})`, () => {
+              const toon = new ToonEncoder({
+                indent: 2,
+                delimiter: ',',
+                keyFolding: 'safe',
+                flattenDepth,
+              }).encode(original);
+              const result = new ToonDecoder({
+                indent: 2,
+                strict,
+                expandPaths: 'safe',
+              }).decode(toon);
+              expect(result).toEqual(original);
+            });
+          }
+        }
+      }
     });
   });
 

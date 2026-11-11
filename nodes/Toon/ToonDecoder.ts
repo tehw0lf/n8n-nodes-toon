@@ -23,6 +23,12 @@ export class ToonDecoder {
    */
   private inHeaderSpan = false;
 
+  /**
+   * Per decoded object, the keys whose last write was a quoted key. Path
+   * expansion keeps these literal, even when they contain dots.
+   */
+  private quotedKeys = new WeakMap<object, Set<string>>();
+
   constructor(options: DecoderOptions) {
     this.options = options;
   }
@@ -33,6 +39,7 @@ export class ToonDecoder {
   decode(toonText: string): unknown {
     this.lines = this.parseLines(toonText);
     this.pos = 0;
+    this.quotedKeys = new WeakMap();
 
     // An empty document (or one of only comments/blanks) decodes to {} (§5)
     if (this.lines.length === 0) {
@@ -311,12 +318,33 @@ export class ToonDecoder {
       // when an enclosing scope's content is under way (§12)
       this.checkBlankInSpan(line, 0);
 
-      const { key, value } = this.parseFieldLine(line, depth);
+      const { key, quoted, value } = this.parseFieldLine(line, depth);
       this.assignKey(obj, key, line);
       utils.setDecodedKey(obj, key, value);
+      this.recordKey(obj, key, quoted);
     }
 
     return obj;
+  }
+
+  /**
+   * Remember whether the last write of `key` into `obj` was a quoted key.
+   * Only path expansion reads this, so nothing is recorded without it.
+   */
+  private recordKey(obj: Record<string, unknown>, key: string, quoted: boolean): void {
+    if (this.options.expandPaths !== 'safe') {
+      return;
+    }
+    let keys = this.quotedKeys.get(obj);
+    if (quoted) {
+      if (keys === undefined) {
+        keys = new Set();
+        this.quotedKeys.set(obj, keys);
+      }
+      keys.add(key);
+    } else {
+      keys?.delete(key);
+    }
   }
 
   /**
@@ -342,7 +370,7 @@ export class ToonDecoder {
   private parseFieldLine(
     line: ParsedLine,
     depth: number,
-  ): { key: string; value: unknown } {
+  ): { key: string; quoted: boolean; value: unknown } {
     const header = this.tryParseHeader(line);
 
     if (header !== null) {
@@ -358,7 +386,7 @@ export class ToonDecoder {
       const value = header.keyed
         ? this.parseKeyedTabularBody(header, depth + 1)
         : this.parseArrayBodyAfterHeader(header, depth);
-      return { key: header.key, value };
+      return { key: header.key, quoted: header.keyQuoted, value };
     }
 
     // Key-value line (§5.2)
@@ -370,21 +398,21 @@ export class ToonDecoder {
       });
     }
 
-    const key = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
+    const { key, quoted } = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
     const rest = utils.trimSpaces(line.content.slice(colonIndex + 1));
     this.pos++;
 
     // "key: []" is the explicit empty-array form (§9.1)
     if (rest === '[]') {
-      return { key, value: [] };
+      return { key, quoted, value: [] };
     }
 
     if (rest !== '') {
-      return { key, value: this.parseValueToken(rest, line) };
+      return { key, quoted, value: this.parseValueToken(rest, line) };
     }
 
     // A bare "key:" opens a nested or empty object (§8)
-    return { key, value: this.parseNestedScope(depth) };
+    return { key, quoted, value: this.parseNestedScope(depth) };
   }
 
   /**
@@ -562,6 +590,7 @@ export class ToonDecoder {
         } else {
           utils.setDecodedKey(obj, entry.name, walk(entry.children));
         }
+        this.recordKey(obj, entry.name, entry.quoted === true);
       }
 
       return obj;
@@ -629,7 +658,10 @@ export class ToonDecoder {
 
       this.checkBlankInSpan(line, count);
 
-      const entryKey = this.decodeKeyToken(line.content.slice(0, colonIndex), line);
+      const { key: entryKey, quoted: entryQuoted } = this.decodeKeyToken(
+        line.content.slice(0, colonIndex),
+        line,
+      );
       const rest = utils.trimSpaces(line.content.slice(colonIndex + 1));
 
       // An empty cell sequence is zero cells, not one empty cell (§9.5, §11.2)
@@ -638,6 +670,7 @@ export class ToonDecoder {
 
       this.assignKey(obj, entryKey, line);
       utils.setDecodedKey(obj, entryKey, this.materializeRow(cells, fields, line));
+      this.recordKey(obj, entryKey, entryQuoted);
       count++;
       this.pos++;
     }
@@ -747,6 +780,7 @@ export class ToonDecoder {
           ? this.parseKeyedTabularBody(header, itemDepth + 2)
           : this.parseArrayContent(header, itemDepth + 2),
       );
+      this.recordKey(obj, header.key, header.keyQuoted);
 
       this.parseListItemRestFields(obj, itemDepth + 1);
       return obj;
@@ -755,7 +789,7 @@ export class ToonDecoder {
     // An object whose first field is carried on the hyphen line (§10)
     const colonIndex = utils.findUnquoted(rest, ':');
     if (colonIndex >= 0) {
-      const key = this.decodeKeyToken(rest.slice(0, colonIndex), line);
+      const { key, quoted } = this.decodeKeyToken(rest.slice(0, colonIndex), line);
       const valuePart = utils.trimSpaces(rest.slice(colonIndex + 1));
       this.pos++;
 
@@ -769,6 +803,7 @@ export class ToonDecoder {
         // A nested scope opened by the first field sits at itemDepth + 2 (§10)
         utils.setDecodedKey(obj, key, this.parseNestedScope(itemDepth + 1));
       }
+      this.recordKey(obj, key, quoted);
 
       this.parseListItemRestFields(obj, itemDepth + 1);
       return obj;
@@ -803,9 +838,10 @@ export class ToonDecoder {
       // These fields continue the enclosing array's header span (§12)
       this.checkBlankInSpan(line, 1);
 
-      const { key, value } = this.parseFieldLine(line, fieldDepth);
+      const { key, quoted, value } = this.parseFieldLine(line, fieldDepth);
       this.assignKey(obj, key, line);
       utils.setDecodedKey(obj, key, value);
+      this.recordKey(obj, key, quoted);
     }
   }
 
@@ -836,7 +872,10 @@ export class ToonDecoder {
   /**
    * Decode a key token, unescaping when quoted (§7.4)
    */
-  private decodeKeyToken(token: string, line: ParsedLine): string {
+  private decodeKeyToken(
+    token: string,
+    line: ParsedLine,
+  ): { key: string; quoted: boolean } {
     const trimmed = utils.trimSpaces(token);
 
     if (trimmed.startsWith('"')) {
@@ -851,10 +890,10 @@ export class ToonDecoder {
         });
       }
 
-      return decoded.value as string;
+      return { key: decoded.value as string, quoted: true };
     }
 
-    return trimmed;
+    return { key: trimmed, quoted: false };
   }
 
   /**
@@ -883,7 +922,8 @@ export class ToonDecoder {
   /**
    * Expand dotted paths into nested objects (optional feature).
    * Plain-object values are expanded recursively, under literal and under
-   * dotted keys alike; arrays are not recursed into.
+   * dotted keys alike; arrays are not recursed into. A key that was written
+   * quoted stays literal, dots included.
    */
   private expandPaths(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
@@ -893,8 +933,10 @@ export class ToonDecoder {
         ? this.expandPaths(value as Record<string, unknown>)
         : value;
 
+    const quoted = this.quotedKeys.get(obj);
+
     for (const [key, value] of Object.entries(obj)) {
-      if (key.includes('.') && this.isExpandable(key)) {
+      if (quoted?.has(key) !== true && this.isExpandable(key)) {
         const segments = key.split('.');
         this.deepSet(result, segments, expandValue(value));
       } else {
@@ -906,11 +948,10 @@ export class ToonDecoder {
   }
 
   /**
-   * Check if a key is expandable (all segments are identifiers)
+   * Check if a key is expandable (dotted, all segments are identifiers)
    */
   private isExpandable(key: string): boolean {
-    const segments = key.split('.');
-    return segments.every((seg) => utils.isIdentifierSegment(seg));
+    return utils.isExpandableDottedKey(key);
   }
 
   /**

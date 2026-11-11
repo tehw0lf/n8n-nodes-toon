@@ -123,7 +123,7 @@ version and appends `; superseded by vX.Y.Z: …` with what changed, e.g.
 | §1.2, §6 | Whitespace is SP and HTAB only; a key may contain inner whitespace and NBSP, only whitespace directly before `[` is an error *(v4.4.0)* | `ToonUtils.parseHeader`, `parseFieldList` | ✅ |
 | §6, §14.2 | An unquoted delimiter in a field list that differs from the declared one is a header syntax error *(v4.4.0)* | `ToonUtils.splitFieldEntries` | ✅ |
 | §9.3, §14.4 | Duplicate field names: an error in strict mode, last-write-wins in non-strict mode *(v4.4.0)* | `ToonUtils.parseHeader` (`tolerateDuplicateFields`) | ✅ |
-| §12, §14.4 | Non-strict tabs in indentation count as one level each, and a tab-indented `#` line is content *(v4.4.0)* | `ToonDecoder.parseLines` | ✅ |
+| §12, §14.4 | Non-strict indentation depth is tabs + floor(spaces / indent size): each tab counts one level, spaces that are not a multiple of the indent size are rounded down, a line of only spaces and tabs is blank, and a tab-indented `#` line is content *(v4.4.0)* | `ToonDecoder.parseLines` | ✅ |
 | §5.2, App. B.5 | A list-item marker may be followed by several spaces *(v4.4.0)* | `ToonDecoder.parseListItem` | ✅ |
 
 ## Testing
@@ -244,10 +244,11 @@ An automated workflow scans the source and the build artifacts for known vulnera
 **Security Checks:**
 - **Source Code:** Semgrep with the rule sets `auto`, `p/security-audit`, `p/owasp-top-ten`, `p/ci`, `p/nodejs` and `p/typescript`
 - **Dependencies:** `npm audit` on production dependencies only (dev dependencies are omitted), failing at severity `critical`
-- **Artifacts:** Trivy and Grype (medium severity and above) on the artifact downloaded from the latest successful `ci.yml` run, which is downloaded rather than rebuilt. The download job asks for an artifact named `dist` and only warns when none is found, and the artifact scan skips Trivy and Grype when it finds no artifact to scan, so a run without a matching artifact passes without scanning anything (tracked in #97)
+- **Artifacts:** Trivy and Grype (medium severity and above) on the `build` artifact of the latest successful `ci.yml` run triggered by a push to `main`, which is downloaded rather than rebuilt
 
 **Behavior:**
-- The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings when an artifact is scanned
+- The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings in the artifact
+- The run also fails when no such `build` artifact is found (for example when no CI run on `main` succeeded within the artifact retention period), until a `ci.yml` run triggered by a push to `main` succeeds
 - On scheduled and manual runs, a failed source scan opens one issue titled "Scheduled source security scan failed" in this repository, updates it on later failures and closes it when a later run passes (`open_failure_issue`, enabled by default in the reusable workflow and not set by the caller)
 - On scheduled and manual runs, when `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened, or an already open one from the same fix branch is updated (`enable_npm_audit_autofix`, enabled by default and not set by the caller)
 - The `scan_source` job needs the `issues: write` permission for the failure issue; the caller grants it

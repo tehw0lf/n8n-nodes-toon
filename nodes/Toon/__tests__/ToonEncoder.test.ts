@@ -496,6 +496,44 @@ describe('ToonEncoder', () => {
   });
 
   describe('key folding', () => {
+    describe('collision with a literal sibling key', () => {
+      const safe = (extra: Partial<EncoderOptions> = {}) =>
+        new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', ...extra });
+
+      it('keeps both values when the literal key comes first', () => {
+        const out = safe().encode({ 'a.b': 1, a: { b: 2 } });
+        expect(out).toBe('"a.b": 1\na:\n  b: 2');
+      });
+
+      it('keeps both values when the chain comes first', () => {
+        const out = safe().encode({ a: { b: 2 }, 'a.b': 1 });
+        expect(out).toBe('a:\n  b: 2\n"a.b": 1');
+      });
+
+      it('applies inside a nested object', () => {
+        const out = safe().encode({ x: { 'a.b': 1, a: { b: 2 } } });
+        expect(out).toBe('x:\n  "a.b": 1\n  a:\n    b: 2');
+      });
+
+      it('applies to a chain cut by flattenDepth', () => {
+        const out = safe({ flattenDepth: 2 }).encode({
+          'a.b': 1,
+          a: { b: { c: 2 } },
+        });
+        expect(out).toBe('"a.b": 1\na:\n  b.c: 2');
+      });
+
+      it('applies to a full-length chain', () => {
+        const out = safe().encode({ 'a.b.c': 1, a: { b: { c: 2 } } });
+        expect(out).toBe('"a.b.c": 1\na:\n  b.c: 2');
+      });
+
+      it('still folds a chain without a colliding sibling', () => {
+        const out = safe().encode({ 'x.y': 1, a: { b: 2 } });
+        expect(out).toBe('"x.y": 1\na.b: 2');
+      });
+    });
+
     it('should not fold keys when keyFolding is off', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'off' });
       const input = {
@@ -568,6 +606,33 @@ describe('ToonEncoder', () => {
       expect(encoder.encode(input)).toBe('a.b:\n  c.d: 1\n  e.f: 2');
     });
 
+    it('should keep a literal dotted key and the colliding chain inside a folded leaf, in both key orders', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const literalFirst = { a: { b: { 'c.d': 5, c: { d: 1 } } } };
+      const chainFirst = { a: { b: { c: { d: 1 }, 'c.d': 5 } } };
+      for (const input of [literalFirst, chainFirst]) {
+        const result = encoder.encode(input);
+        expect(result).toContain('5');
+        expect(result).toContain('1');
+      }
+      expect(encoder.encode(literalFirst)).toBe('a.b:\n  "c.d": 5\n  c:\n    d: 1');
+      expect(encoder.encode(chainFirst)).toBe('a.b:\n  c:\n    d: 1\n  "c.d": 5');
+    });
+
+    it('should leave a single-key leaf cut by flattenDepth nested', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { c: { d: { e: 1 } } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c:\n    d:\n      e: 1');
+    });
+
+    it('should fold inside a leaf whose only key is unsafe, like the non-chain branch', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { constructor: { p: { q: 1 } } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  constructor:\n    p.q: 1');
+      const sibling = { x: { constructor: { p: { q: 1 } } }, y: 1 };
+      expect(encoder.encode(sibling)).toBe('x:\n  constructor:\n    p.q: 1\ny: 1');
+    });
+
     it('should fold nested chains ending in another multi-key object', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
       const input = { a: { b: { c: { d: { x: 1, y: 2 } }, e: 3 } } };
@@ -587,6 +652,73 @@ describe('ToonEncoder', () => {
       // 'child-key' contains hyphen, which might not be safe for folding
       // depending on isIdentifierSegment implementation
       expect(result).toContain('parent:');
+    });
+
+    describe('literal dotted keys', () => {
+      const fold = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe' });
+      const off = new ToonEncoder(defaultOptions);
+
+      it('quotes a literal dotted key of a nested object', () => {
+        const input = { x: { 'c.d': 1 }, y: 1 };
+        expect(fold.encode(input)).toBe('x:\n  "c.d": 1\ny: 1');
+        expect(off.encode(input)).toBe('x:\n  c.d: 1\ny: 1');
+      });
+
+      it('quotes a literal dotted root key and header key', () => {
+        expect(fold.encode({ 'c.d': 1 })).toBe('"c.d": 1');
+        expect(fold.encode({ 'k.l': [1, 2] })).toBe('"k.l"[2]: 1,2');
+        expect(off.encode({ 'k.l': [1, 2] })).toBe('k.l[2]: 1,2');
+      });
+
+      it('quotes keyed table entry keys and field names', () => {
+        const entries = { t: { 'a.b': { x: 1 }, 'c.e': { x: 2 } } };
+        expect(fold.encode(entries)).toBe('t[2:]{x}:\n  "a.b": 1\n  "c.e": 2');
+        expect(off.encode(entries)).toBe('t[2:]{x}:\n  a.b: 1\n  c.e: 2');
+
+        const fields = { t: { r1: { 'p.q': 1, z: 1 }, r2: { 'p.q': 2, z: 2 } } };
+        expect(fold.encode(fields)).toBe('t[2:]{"p.q",z}:\n  r1: 1,1\n  r2: 2,2');
+        expect(off.encode(fields)).toBe('t[2:]{p.q,z}:\n  r1: 1,1\n  r2: 2,2');
+      });
+
+      it('quotes a literal key inside the leaf of a folded chain', () => {
+        expect(fold.encode({ a: { b: { 'c.d': 1, e: 1 } } })).toBe(
+          'a.b:\n  "c.d": 1\n  e: 1',
+        );
+      });
+
+      it('leaves folded keys unquoted', () => {
+        expect(fold.encode({ a: { b: { c: 1 } } })).toBe('a.b.c: 1');
+      });
+
+      it('leaves dotted keys inside arrays unquoted', () => {
+        expect(fold.encode({ arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] })).toBe(
+          'arr[2]:\n  - c.d: 1\n    e: 2\n  - f: 1',
+        );
+      });
+
+      it('leaves dotted keys that expansion would not split unquoted', () => {
+        expect(fold.encode({ x: { 'a..b': 1, 'x.1': 2 } })).toBe('x:\n  a..b: 1\n  x.1: 2');
+      });
+
+      it('writes a keyed table in nested form when a field is literal in one entry and folded in another', () => {
+        const input = { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } };
+        const text = fold.encode(input);
+        expect(text).not.toContain('[2:]');
+        expect(text).toContain('"p.q": 1');
+        expect(text).toContain('p.q: 2');
+      });
+
+      it('writes a keyed table in nested form when a nested field group disagrees', () => {
+        const input = {
+          t: {
+            r1: { p: { 'x.y': 1, w: 1 }, z: 1 },
+            r2: { p: { x: { y: 2 }, w: 2 }, z: 2 },
+          },
+        };
+        const text = fold.encode(input);
+        expect(text).not.toContain('[2:]');
+        expect(text).toContain('"x.y": 1');
+      });
     });
   });
 

@@ -59,6 +59,11 @@ export interface FieldEntry {
   name: string;
   /** Nested field group, or null for a leaf field */
   children: FieldEntry[] | null;
+  /**
+   * The name is written quoted. Set by the decoder for a quoted name, and by
+   * the encoder for a name it must quote so that path expansion keeps it literal.
+   */
+  quoted?: boolean;
 }
 
 // Parsed header information lives in ToonUtils as `ParsedHeader`, alongside
@@ -72,13 +77,13 @@ export interface ParsedLine {
   content: string;
   /** Leading indentation spaces (tabs excluded) */
   indent: number;
-  /** Indentation depth in levels (§1.3, §12): tabs count one level each in non-strict mode */
+  /** Indentation depth in levels (§1.3, §12, §14.4): spaces / indent size in strict mode; in non-strict mode tabs + floor(spaces / indent size), each tab counting one level */
   depth: number;
   /** Line number (1-indexed) */
   lineNumber: number;
   /** Whether line is empty or whitespace */
   isEmpty: boolean;
-  /** Whether a blank line was dropped immediately before this line (§12) */
+  /** Whether a blank line was dropped immediately before this line (§12); blank means a line of only spaces in strict mode, a line of only spaces and tabs in non-strict mode (§12, §14.4) */
   blankBefore: boolean;
 }
 

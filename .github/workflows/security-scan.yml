@@ -8,7 +8,8 @@
 #
 # Security Checks:
 # - Source code scanning: Semgrep (OWASP Top 10, security-audit, CI), npm audit
-# - Artifact scanning: Trivy on dist/ artifacts (requires prior build)
+# - Artifact scanning: Trivy and Grype on the build artifact of the latest
+#   successful ci.yml push run on main (the run fails when there is none)
 #
 name: Security Monitoring
 
@@ -42,20 +43,22 @@ jobs:
       npm_audit_omit_dev: true
       npm_audit_severity_threshold: "critical"
 
-  # Download artifacts from latest CI build
-  # Note: Reuses artifacts from the main CI workflow instead of rebuilding
+  # Download the build artifact of the latest successful ci.yml push run on main
+  # Note: Reuses artifacts from the main CI workflow instead of rebuilding; the
+  # download fails when no such artifact exists
   download_artifacts:
     name: Download Build Artifacts
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download latest dist artifacts from CI
+      - name: Download latest build artifact from CI
         uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           workflow: ci.yml
-          name: dist
+          branch: main
+          event: push
+          name: build
           path: dist/
-          if_no_artifact_found: warn
 
       - name: Upload artifacts for scanning
         if: hashFiles('dist/**/*') != ''
