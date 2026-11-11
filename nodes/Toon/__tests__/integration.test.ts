@@ -344,7 +344,13 @@ describe('Integration Tests', () => {
         'leaf of a folded chain': { a: { b: { 'c.d': 1, e: 1 } } },
         'inside an array': { arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] },
         'next to a folded key': { 'a.b': 1, c: { d: 2 } },
-        'mixed keyed table': { t: { r1: { 'p.q': 1 }, r2: { p: { q: 2 } } } },
+        'mixed keyed table': { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } },
+        'mixed keyed table with nested field group': {
+          t: {
+            r1: { p: { 'x.y': 1, w: 1 }, z: 1 },
+            r2: { p: { x: { y: 2 }, w: 2 }, z: 2 },
+          },
+        },
       };
 
       for (const [name, original] of Object.entries(inputs)) {

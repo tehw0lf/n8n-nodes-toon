@@ -618,11 +618,23 @@ describe('ToonEncoder', () => {
       });
 
       it('writes a keyed table in nested form when a field is literal in one entry and folded in another', () => {
-        const input = { t: { r1: { 'p.q': 1 }, r2: { p: { q: 2 } } } };
+        const input = { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } };
         const text = fold.encode(input);
         expect(text).not.toContain('[2:]');
         expect(text).toContain('"p.q": 1');
         expect(text).toContain('p.q: 2');
+      });
+
+      it('writes a keyed table in nested form when a nested field group disagrees', () => {
+        const input = {
+          t: {
+            r1: { p: { 'x.y': 1, w: 1 }, z: 1 },
+            r2: { p: { x: { y: 2 }, w: 2 }, z: 2 },
+          },
+        };
+        const text = fold.encode(input);
+        expect(text).not.toContain('[2:]');
+        expect(text).toContain('"x.y": 1');
       });
     });
   });
