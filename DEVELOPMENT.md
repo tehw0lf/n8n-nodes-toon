@@ -80,6 +80,11 @@ introduced a given rule; they are historical and intentionally not updated.
 When a later release changes such a rule, the annotation keeps the introducing
 version and appends `; superseded by vX.Y.Z: …` with what changed, e.g.
 *(v3.0.3; superseded by v4.4.0: an error in both modes)*.
+When a later release changes a rule whose row carries no version annotation,
+append `*(superseded by vX.Y.Z: …)*` with what changed to the row's Feature
+cell, without an introducing version: the table does not record which release
+introduced that rule, e.g. *(superseded by v4.5.0: an error in both modes)*.
+The example is an illustration, not a change to an existing row.
 
 | Spec Section | Feature | Implementation | Status |
 |---|---|---|---|
