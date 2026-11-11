@@ -248,7 +248,7 @@ An automated workflow scans the source and the build artifacts for known vulnera
 
 **Behavior:**
 - The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings in the artifact
-- The run also fails when no such `build` artifact is found (for example when `main` had no push within the artifact retention period), until the next push to `main`
+- The run also fails when no such `build` artifact is found (for example when no CI run on `main` succeeded within the artifact retention period), until a `ci.yml` run triggered by a push to `main` succeeds
 - On scheduled and manual runs, a failed source scan opens one issue titled "Scheduled source security scan failed" in this repository, updates it on later failures and closes it when a later run passes (`open_failure_issue`, enabled by default in the reusable workflow and not set by the caller)
 - On scheduled and manual runs, when `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened, or an already open one from the same fix branch is updated (`enable_npm_audit_autofix`, enabled by default and not set by the caller)
 - The `scan_source` job needs the `issues: write` permission for the failure issue; the caller grants it
