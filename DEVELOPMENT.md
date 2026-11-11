@@ -244,10 +244,11 @@ An automated workflow scans the source and the build artifacts for known vulnera
 **Security Checks:**
 - **Source Code:** Semgrep with the rule sets `auto`, `p/security-audit`, `p/owasp-top-ten`, `p/ci`, `p/nodejs` and `p/typescript`
 - **Dependencies:** `npm audit` on production dependencies only (dev dependencies are omitted), failing at severity `critical`
-- **Artifacts:** Trivy and Grype (medium severity and above) on the artifact downloaded from the latest successful `ci.yml` run, which is downloaded rather than rebuilt. The download job asks for an artifact named `dist` and only warns when none is found, and the artifact scan skips Trivy and Grype when it finds no artifact to scan, so a run without a matching artifact passes without scanning anything (tracked in #97)
+- **Artifacts:** Trivy and Grype (medium severity and above) on the `build` artifact of the latest successful `ci.yml` run triggered by a push to `main`, which is downloaded rather than rebuilt
 
 **Behavior:**
-- The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings when an artifact is scanned
+- The run fails on unsuppressed Semgrep findings, on a Semgrep run that produces no valid results file, on an `npm audit` result at or above the threshold (the `npm audit` step does not run after a failed Semgrep check), and on Trivy or Grype findings in the artifact
+- The run also fails when no such `build` artifact is found (for example when `main` had no push within the artifact retention period), until the next push to `main`
 - On scheduled and manual runs, a failed source scan opens one issue titled "Scheduled source security scan failed" in this repository, updates it on later failures and closes it when a later run passes (`open_failure_issue`, enabled by default in the reusable workflow and not set by the caller)
 - On scheduled and manual runs, when `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened, or an already open one from the same fix branch is updated (`enable_npm_audit_autofix`, enabled by default and not set by the caller)
 - The `scan_source` job needs the `issues: write` permission for the failure issue; the caller grants it
