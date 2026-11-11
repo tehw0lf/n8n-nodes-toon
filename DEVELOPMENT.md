@@ -123,7 +123,7 @@ version and appends `; superseded by vX.Y.Z: …` with what changed, e.g.
 | §1.2, §6 | Whitespace is SP and HTAB only; a key may contain inner whitespace and NBSP, only whitespace directly before `[` is an error *(v4.4.0)* | `ToonUtils.parseHeader`, `parseFieldList` | ✅ |
 | §6, §14.2 | An unquoted delimiter in a field list that differs from the declared one is a header syntax error *(v4.4.0)* | `ToonUtils.splitFieldEntries` | ✅ |
 | §9.3, §14.4 | Duplicate field names: an error in strict mode, last-write-wins in non-strict mode *(v4.4.0)* | `ToonUtils.parseHeader` (`tolerateDuplicateFields`) | ✅ |
-| §12, §14.4 | Non-strict tabs in indentation count as one level each, and a tab-indented `#` line is content *(v4.4.0)* | `ToonDecoder.parseLines` | ✅ |
+| §12, §14.4 | Non-strict indentation depth is tabs + floor(spaces / indent size): each tab counts one level, spaces that are not a multiple of the indent size are rounded down, a line of only spaces and tabs is blank, and a tab-indented `#` line is content *(v4.4.0)* | `ToonDecoder.parseLines` | ✅ |
 | §5.2, App. B.5 | A list-item marker may be followed by several spaces *(v4.4.0)* | `ToonDecoder.parseListItem` | ✅ |
 
 ## Testing
