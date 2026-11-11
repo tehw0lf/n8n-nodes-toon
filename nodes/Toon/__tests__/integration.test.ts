@@ -270,6 +270,66 @@ describe('Integration Tests', () => {
   });
 
   describe('Round-trip: JSON → TOON → JSON with key folding/expansion', () => {
+    it('should round-trip chains folded inside the leaf of a folded chain', () => {
+      const original = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      const encoder = new ToonEncoder({
+        indent: 2,
+        delimiter: ',',
+        keyFolding: 'safe',
+        flattenDepth: 999,
+      });
+      const decoder = new ToonDecoder({
+        indent: 2,
+        strict: true,
+        expandPaths: 'safe',
+      });
+
+      const toon = encoder.encode(original);
+      expect(toon).toContain('c.d: 1');
+      expect(decoder.decode(toon)).toEqual(original);
+    });
+
+    describe('literal dotted key colliding with a chain inside a folded leaf', () => {
+      const inputs = [
+        { a: { b: { 'c.d': 5, c: { d: 1 } } } },
+        { a: { b: { c: { d: 1 }, 'c.d': 5 } } },
+      ];
+      // expandPaths 'off' keeps a folded key literal, so only 'safe' round-trips
+      for (const strict of [true, false]) {
+        it(`keeps both values in both key orders (strict ${strict})`, () => {
+          const encoder = new ToonEncoder({
+            indent: 2,
+            delimiter: ',',
+            keyFolding: 'safe',
+            flattenDepth: 999,
+          });
+          const decoder = new ToonDecoder({ indent: 2, strict, expandPaths: 'safe' });
+          for (const input of inputs) {
+            expect(decoder.decode(encoder.encode(input))).toEqual(input);
+          }
+        });
+      }
+    });
+
+    it('should fold inside a leaf whose only key is unsafe and round-trip it', () => {
+      const original = { a: { b: { constructor: { p: { q: 1 } } } } };
+      const encoder = new ToonEncoder({
+        indent: 2,
+        delimiter: ',',
+        keyFolding: 'safe',
+        flattenDepth: 999,
+      });
+      const decoder = new ToonDecoder({
+        indent: 2,
+        strict: true,
+        expandPaths: 'safe',
+      });
+
+      const toon = encoder.encode(original);
+      expect(toon).toContain('p.q: 1');
+      expect(decoder.decode(toon)).toEqual(original);
+    });
+
     describe('literal dotted key colliding with a folded chain', () => {
       const inputs = [
         { 'a.b': 1, a: { b: 2 } },

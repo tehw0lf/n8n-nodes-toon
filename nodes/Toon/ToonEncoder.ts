@@ -564,9 +564,13 @@ export class ToonEncoder {
         this.isChainSafe(chain) &&
         !Object.prototype.hasOwnProperty.call(obj, foldedKey)
       ) {
-        // Fold the chain
+        // Fold the chain. A leaf object is folded recursively like any other
+        // object, except a single-key leaf with a safe key: that is the
+        // remainder of a chain cut by flattenDepth and stays nested. A leaf
+        // whose only key is unsafe (the chain stops there, see
+        // extractFoldableChain) is folded like the non-chain branch does.
         const leafValue = this.getLeafValue(value, chain.length - 1);
-        utils.setDecodedKey(result, foldedKey, leafValue);
+        utils.setDecodedKey(result, foldedKey, this.foldLeaf(leafValue));
         folded.add(foldedKey);
       } else {
         folded.delete(key);
@@ -584,6 +588,23 @@ export class ToonEncoder {
     }
 
     return result;
+  }
+
+  /**
+   * Fold inside the leaf of a folded chain: an object with several keys, or
+   * with a single unsafe key, is folded like any other object. A single-key
+   * leaf with a safe key is left as is, because the chain was cut there by
+   * flattenDepth.
+   */
+  private foldLeaf(leaf: unknown): unknown {
+    if (!utils.isPlainObject(leaf)) {
+      return leaf;
+    }
+    const keys = Object.keys(leaf as Record<string, unknown>);
+    if (keys.length === 1 && utils.isSafeKey(keys[0])) {
+      return leaf;
+    }
+    return this.foldKeys(leaf as Record<string, unknown>);
   }
 
   /**

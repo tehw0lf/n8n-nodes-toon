@@ -594,6 +594,51 @@ describe('ToonEncoder', () => {
       expect(result).toContain('    d: deep');
     });
 
+    it('should fold chains inside the multi-key leaf of a folded chain', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d: 1\n  e.f: 2');
+    });
+
+    it('should fold inside the multi-key leaf when the chain reached flattenDepth', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d: 1\n  e.f: 2');
+    });
+
+    it('should keep a literal dotted key and the colliding chain inside a folded leaf, in both key orders', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const literalFirst = { a: { b: { 'c.d': 5, c: { d: 1 } } } };
+      const chainFirst = { a: { b: { c: { d: 1 }, 'c.d': 5 } } };
+      for (const input of [literalFirst, chainFirst]) {
+        const result = encoder.encode(input);
+        expect(result).toContain('5');
+        expect(result).toContain('1');
+      }
+      expect(encoder.encode(literalFirst)).toBe('a.b:\n  "c.d": 5\n  c:\n    d: 1');
+      expect(encoder.encode(chainFirst)).toBe('a.b:\n  c:\n    d: 1\n  "c.d": 5');
+    });
+
+    it('should leave a single-key leaf cut by flattenDepth nested', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { c: { d: { e: 1 } } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c:\n    d:\n      e: 1');
+    });
+
+    it('should fold inside a leaf whose only key is unsafe, like the non-chain branch', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { constructor: { p: { q: 1 } } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  constructor:\n    p.q: 1');
+      const sibling = { x: { constructor: { p: { q: 1 } } }, y: 1 };
+      expect(encoder.encode(sibling)).toBe('x:\n  constructor:\n    p.q: 1\ny: 1');
+    });
+
+    it('should fold nested chains ending in another multi-key object', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
+      const input = { a: { b: { c: { d: { x: 1, y: 2 } }, e: 3 } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c.d:\n    x: 1\n    y: 2\n  e: 3');
+    });
+
     it('should not fold keys with unsafe characters', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe' });
       const input = {
