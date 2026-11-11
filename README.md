@@ -497,21 +497,18 @@ See [`.github/workflows/monitor-spec.yml`](.github/workflows/monitor-spec.yml) f
 
 ### Security Monitoring
 
-Performs comprehensive security scanning to detect vulnerabilities:
+Scans the source and the build artifacts for known vulnerabilities. The workflow calls the reusable workflows `security-scan-source.yml` and `security-scan-artifacts.yml` from `tehw0lf/workflows` and does not build or publish anything:
 
-- **Frequency:** Runs daily at 2:00 AM UTC
-- **Source Code Scanning:** Semgrep analysis for security issues (OWASP Top 10, etc.)
-- **Dependency Scanning:** npm audit on dependencies
-- **Published Package Scanning:** Checks the live npm package for newly disclosed vulnerabilities
-- **Automatic Trigger:** Also runs on changes to `package.json` or `package-lock.json`
+- **Frequency:** Runs daily at 2:00 AM UTC and can be triggered manually via GitHub Actions; there is no trigger on dependency changes
+- **Source Code Scanning:** Semgrep with the `auto`, `p/security-audit`, `p/owasp-top-ten`, `p/ci`, `p/nodejs` and `p/typescript` rule sets
+- **Dependency Scanning:** `npm audit` on production dependencies, failing at severity `critical`
+- **Artifact Scanning:** Trivy and Grype on the `build` artifact of the latest successful CI run triggered by a push to `main` (downloaded, not rebuilt); the run fails when no such artifact exists
 
-When vulnerabilities are detected, the workflow:
-1. Creates a labeled issue (`security`, `vulnerability`, `dependencies`)
-2. Includes severity levels and full audit report
-3. Provides remediation guidance with specific commands
-4. Updates existing issues instead of creating duplicates
+On failure of a scheduled or manual run:
+1. A failed source scan opens one issue in this repository, updates it on later failures and closes it when a later run passes
+2. When `npm audit` fails and `npm audit fix` changes `package-lock.json`, a pull request with the fix is opened or updated
 
-See [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) for implementation details.
+See [DEVELOPMENT.md](DEVELOPMENT.md#security-monitoring) for the full behavior and [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) for implementation details.
 
 ## Resources
 
