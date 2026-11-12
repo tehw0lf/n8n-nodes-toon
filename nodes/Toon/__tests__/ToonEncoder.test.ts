@@ -625,6 +625,28 @@ describe('ToonEncoder', () => {
       expect(encoder.encode(input)).toBe('a.b:\n  c:\n    d:\n      e: 1');
     });
 
+    it('should fold inside the object at the end of a flattenDepth-cut remainder', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      expect(encoder.encode({ a: { b: { c: { d: { e: 1 }, f: { g: 2 } } } } })).toBe(
+        'a.b:\n  c:\n    d.e: 1\n    f.g: 2',
+      );
+      expect(encoder.encode({ a: { b: { c: { d: { p: { q: 1 }, r: { s: 2 } } } } } })).toBe(
+        'a.b:\n  c:\n    d:\n      p.q: 1\n      r.s: 2',
+      );
+    });
+
+    it('should keep a literal dotted key quoted in a cut remainder', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { 'c.d': { x: { y: 1 }, z: 2 } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  "c.d":\n    x.y: 1\n    z: 2');
+    });
+
+    it('should fold inside an unsafe-key object at the end of a cut remainder', () => {
+      const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 2 });
+      const input = { a: { b: { c: { constructor: { p: { q: 1 } } } } } };
+      expect(encoder.encode(input)).toBe('a.b:\n  c:\n    constructor:\n      p.q: 1');
+    });
+
     it('should fold inside a leaf whose only key is unsafe, like the non-chain branch', () => {
       const encoder = new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', flattenDepth: 999 });
       const input = { a: { b: { constructor: { p: { q: 1 } } } } };
