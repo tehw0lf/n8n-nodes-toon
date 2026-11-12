@@ -924,13 +924,19 @@ export class ToonDecoder {
    * Plain-object values are expanded recursively, under literal and under
    * dotted keys alike; arrays are not recursed into. A key that was written
    * quoted stays literal, dots included.
+   *
+   * `prefix` holds the path segments from the root to `obj`, so that conflicts
+   * found in nested objects are reported with the full path.
    */
-  private expandPaths(obj: Record<string, unknown>): Record<string, unknown> {
+  private expandPaths(
+    obj: Record<string, unknown>,
+    prefix: string[] = [],
+  ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-    // Recursively expand nested objects
-    const expandValue = (value: unknown): unknown =>
+    // Recursively expand nested objects, which sit at `childPrefix`
+    const expandValue = (value: unknown, childPrefix: string[]): unknown =>
       utils.isPlainObject(value)
-        ? this.expandPaths(value as Record<string, unknown>)
+        ? this.expandPaths(value as Record<string, unknown>, childPrefix)
         : value;
 
     const quoted = this.quotedKeys.get(obj);
@@ -938,9 +944,19 @@ export class ToonDecoder {
     for (const [key, value] of Object.entries(obj)) {
       if (quoted?.has(key) !== true && this.isExpandable(key)) {
         const segments = key.split('.');
-        this.deepSet(result, segments, expandValue(value));
+        this.deepSet(
+          result,
+          segments,
+          expandValue(value, [...prefix, ...segments]),
+          prefix,
+        );
       } else {
-        this.assignExpanded(result, key, expandValue(value), key);
+        this.assignExpanded(
+          result,
+          key,
+          expandValue(value, [...prefix, key]),
+          [...prefix, key].join('.'),
+        );
       }
     }
 
@@ -955,9 +971,15 @@ export class ToonDecoder {
   }
 
   /**
-   * Deep set a value in an object by path
+   * Deep set a value in an object by path. `prefix` holds the segments from the
+   * root to `obj`; it is only used to report conflicts with their full path.
    */
-  private deepSet(obj: Record<string, unknown>, path: string[], value: unknown): void {
+  private deepSet(
+    obj: Record<string, unknown>,
+    path: string[],
+    value: unknown,
+    prefix: string[] = [],
+  ): void {
     let current: Record<string, unknown> = obj;
 
     for (let i = 0; i < path.length - 1; i++) {
@@ -976,7 +998,7 @@ export class ToonDecoder {
         // Conflict: need object but found non-object
         if (this.options.strict) {
           throw new ToonDecodingError(
-            `Path expansion conflict at '${path.slice(0, i + 1).join('.')}': cannot combine ${this.describeKind(current[segment])} with object`,
+            `Path expansion conflict at '${[...prefix, ...path.slice(0, i + 1)].join('.')}': cannot combine ${this.describeKind(current[segment])} with object`,
           );
         }
         // LWW: overwrite
@@ -996,7 +1018,7 @@ export class ToonDecoder {
       );
     }
 
-    this.assignExpanded(current, lastSegment, value, path.join('.'));
+    this.assignExpanded(current, lastSegment, value, [...prefix, ...path].join('.'));
   }
 
   /**

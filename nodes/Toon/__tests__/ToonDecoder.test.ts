@@ -608,6 +608,34 @@ describe('ToonDecoder', () => {
       });
     });
 
+    describe('nested conflicts report the full path', () => {
+      const strictOptions: DecoderOptions = { ...expandOptions, strict: true };
+
+      const cases: Array<[string, string]> = [
+        ['a:\n  c.d: 1\n  c: 5', "'a.c': cannot combine object with number"],
+        ['a:\n  c: 5\n  c.d: 1', "'a.c': cannot combine number with object"],
+        ['a.b:\n  c.d: 1\n  c: 5', "'a.b.c': cannot combine object with number"],
+        ['a.b:\n  c: 5\n  c.d: 1', "'a.b.c': cannot combine number with object"],
+        ['a:\n  c.d: 1\n  c.d.e: 2', "'a.c.d': cannot combine number with object"],
+        ['x:\n  a.b:\n    c.d: 1\n    c: 5', "'x.a.b.c': cannot combine object with number"],
+        ['a:\n  b:\n    c: 1\n  b.c: 2', "'a.b.c': cannot combine number with number"],
+        ['a:\n  b.c: 1\n  b:\n    c: 2', "'a.b.c': cannot combine number with number"],
+      ];
+
+      it.each(cases)('should report the path from the root: %j', (toon, detail) => {
+        const decoder = new ToonDecoder(strictOptions);
+        expect(() => decoder.decode(toon)).toThrow(ToonDecodingError);
+        expect(() => decoder.decode(toon)).toThrow(
+          `Path expansion conflict at ${detail}`,
+        );
+      });
+
+      it('should not change the result in non-strict mode', () => {
+        const decoder = new ToonDecoder(expandOptions);
+        expect(decoder.decode('a:\n  c.d: 1\n  c: 5')).toEqual({ a: { c: 5 } });
+      });
+    });
+
     describe('quoted keys stay literal', () => {
       const expand = (strict = true): ToonDecoder =>
         new ToonDecoder({ ...defaultOptions, strict, expandPaths: 'safe' });
