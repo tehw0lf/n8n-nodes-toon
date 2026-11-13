@@ -12,6 +12,8 @@ export class ToonEncoder {
   private documentDelimiter: Delimiter;
 
   /** Per object, the keys that `foldKeys` produced by folding a chain */
+  /** True while the rows of a keyed table are folded (see foldKeys). */
+  private insideRow = false;
   private foldedKeys = new WeakMap<object, Set<string>>();
 
   /**
@@ -549,20 +551,28 @@ export class ToonEncoder {
    * same object (safe-mode collision rule, §13.4 rule 2 of the archived v3.3
    * spec), so neither value is overwritten. The entries of an object that
    * would be written as a keyed table are not folded (their values are), so
-   * the table is kept instead of being turned into dotted keys.
+   * the table is kept instead of being turned into dotted keys. Objects below
+   * such a row are written as cells or field trees of the table, never as a
+   * table of their own, so they keep folding per entry. Folding rows keeps the
+   * shape the table check saw (same keys and nesting), so the folded object is
+   * written as a keyed table too.
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {
-    if (utils.getKeyedTabularFields(obj) !== null) {
+    if (!this.insideRow && utils.getKeyedTabularFields(obj) !== null) {
       const candidate: Record<string, unknown> = {};
-      this.foldedKeys.set(candidate, new Set());
-      for (const [key, value] of Object.entries(obj)) {
-        const row = this.foldKeys(value as Record<string, unknown>);
-        this.markLiteralDottedKeys(row);
-        utils.setDecodedKey(candidate, key, row);
+      this.insideRow = true;
+      try {
+        for (const [key, value] of Object.entries(obj)) {
+          utils.setDecodedKey(
+            candidate,
+            key,
+            this.foldKeys(value as Record<string, unknown>),
+          );
+        }
+      } finally {
+        this.insideRow = false;
       }
-      if (this.getKeyedFields(candidate) !== null) {
-        return candidate;
-      }
+      return candidate;
     }
 
     const result: Record<string, unknown> = {};

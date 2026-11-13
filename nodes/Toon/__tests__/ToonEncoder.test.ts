@@ -784,7 +784,24 @@ describe('ToonEncoder', () => {
         expect(out).toBe('t[2:]{p.q,z}:\n  r1: 1,1\n  r2: 2,2');
       });
 
-      it('falls back to per-entry folding when rows disagree on quoting', () => {
+      it('keeps folding inside a row that is itself table-shaped', () => {
+        const out = safe().encode({
+          t: { a: { m: { x: 1 }, n: { x: 2 } }, b: { m: { x: 3 }, n: { x: 4 } } },
+        });
+        expect(out).toBe('t[2:]{m.x,n.x}:\n  a: 1,2\n  b: 3,4');
+      });
+
+      it('keeps folding below a row field that is table-shaped', () => {
+        const out = safe().encode({
+          t: {
+            r1: { k: { a: { x: 1 }, b: { x: 2 } }, z: 1 },
+            r2: { k: { a: { x: 3 }, b: { x: 4 } }, z: 2 },
+          },
+        });
+        expect(out).toBe('t[2:]{k{a.x,b.x},z}:\n  r1: 1,2,1\n  r2: 3,4,2');
+      });
+
+      it('folds per entry when the rows do not share one shape', () => {
         const out = safe().encode({ t: { a: { 'p.x': 1 }, b: { p: { x: 2 } } } });
         expect(out).toBe('t:\n  a:\n    "p.x": 1\n  b.p.x: 2');
       });
