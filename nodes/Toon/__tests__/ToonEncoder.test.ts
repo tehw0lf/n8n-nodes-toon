@@ -742,6 +742,70 @@ describe('ToonEncoder', () => {
         expect(text).toContain('"x.y": 1');
       });
     });
+
+    describe('keyed tables win over folding the entries', () => {
+      const safe = (extra: Partial<EncoderOptions> = {}) =>
+        new ToonEncoder({ ...defaultOptions, keyFolding: 'safe', ...extra });
+
+      it('keeps the table when one entry key cannot start a chain', () => {
+        const out = safe().encode({ q: 1, t: { constructor: { x: 3 }, d: { x: 4 } } });
+        expect(out).toBe('q: 1\nt[2:]{x}:\n  constructor: 3\n  d: 4');
+      });
+
+      it('keeps the table when every entry is foldable', () => {
+        const out = safe().encode({ t: { a: { x: 3 }, d: { x: 4 } } });
+        expect(out).toBe('t[2:]{x}:\n  a: 3\n  d: 4');
+      });
+
+      it('keeps the table at the root', () => {
+        const out = safe().encode({ a: { x: 3 }, d: { x: 4 } });
+        expect(out).toBe('[2:]{x}:\n  a: 3\n  d: 4');
+      });
+
+      it('folds inside the rows', () => {
+        const input = { t: { a: { p: { x: 1 } }, b: { p: { x: 2 } } } };
+        expect(safe().encode(input)).toBe('t[2:]{p.x}:\n  a: 1\n  b: 2');
+        expect(safe({ flattenDepth: 2 }).encode(input)).toBe(
+          't[2:]{p.x}:\n  a: 1\n  b: 2',
+        );
+      });
+
+      it('keeps entries that would fold into a table themselves unfolded', () => {
+        const out = safe().encode({
+          t: { a: { x: { m: 1, n: 2 } }, d: { x: { m: 3, n: 4 } } },
+        });
+        expect(out).toBe('t[2:]{x{m,n}}:\n  a: 1,2\n  d: 3,4');
+      });
+
+      it('still writes multi-field rows as a table', () => {
+        const out = safe().encode({
+          t: { r1: { p: { q: 1 }, z: 1 }, r2: { p: { q: 2 }, z: 2 } },
+        });
+        expect(out).toBe('t[2:]{p.q,z}:\n  r1: 1,1\n  r2: 2,2');
+      });
+
+      it('keeps folding inside a row that is itself table-shaped', () => {
+        const out = safe().encode({
+          t: { a: { m: { x: 1 }, n: { x: 2 } }, b: { m: { x: 3 }, n: { x: 4 } } },
+        });
+        expect(out).toBe('t[2:]{m.x,n.x}:\n  a: 1,2\n  b: 3,4');
+      });
+
+      it('keeps folding below a row field that is table-shaped', () => {
+        const out = safe().encode({
+          t: {
+            r1: { k: { a: { x: 1 }, b: { x: 2 } }, z: 1 },
+            r2: { k: { a: { x: 3 }, b: { x: 4 } }, z: 2 },
+          },
+        });
+        expect(out).toBe('t[2:]{k{a.x,b.x},z}:\n  r1: 1,2,1\n  r2: 3,4,2');
+      });
+
+      it('folds per entry when the rows do not share one shape', () => {
+        const out = safe().encode({ t: { a: { 'p.x': 1 }, b: { p: { x: 2 } } } });
+        expect(out).toBe('t:\n  a:\n    "p.x": 1\n  b.p.x: 2');
+      });
+    });
   });
 
   describe('indentation', () => {

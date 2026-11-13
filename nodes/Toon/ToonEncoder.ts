@@ -11,6 +11,9 @@ export class ToonEncoder {
   private options: EncoderOptions;
   private documentDelimiter: Delimiter;
 
+  /** True while the rows of a keyed table are folded (see foldKeys). */
+  private insideRow = false;
+
   /** Per object, the keys that `foldKeys` produced by folding a chain */
   private foldedKeys = new WeakMap<object, Set<string>>();
 
@@ -547,9 +550,32 @@ export class ToonEncoder {
    * Collapses single-key object chains into dotted paths. A chain is left
    * unfolded (written nested) when its folded key equals a literal key of the
    * same object (safe-mode collision rule, §13.4 rule 2 of the archived v3.3
-   * spec), so neither value is overwritten.
+   * spec), so neither value is overwritten. The entries of an object that
+   * would be written as a keyed table are not folded (their values are), so
+   * the table is kept instead of being turned into dotted keys. Objects below
+   * such a row are written as cells or field trees of the table, never as a
+   * table of their own, so they keep folding per entry. Folding rows keeps the
+   * shape the table check saw (same keys and nesting), so the folded object is
+   * written as a keyed table too.
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {
+    if (!this.insideRow && utils.getKeyedTabularFields(obj) !== null) {
+      const candidate: Record<string, unknown> = {};
+      this.insideRow = true;
+      try {
+        for (const [key, value] of Object.entries(obj)) {
+          utils.setDecodedKey(
+            candidate,
+            key,
+            this.foldKeys(value as Record<string, unknown>),
+          );
+        }
+      } finally {
+        this.insideRow = false;
+      }
+      return candidate;
+    }
+
     const result: Record<string, unknown> = {};
     const folded = new Set<string>();
     this.foldedKeys.set(result, folded);

@@ -270,6 +270,30 @@ describe('Integration Tests', () => {
   });
 
   describe('Round-trip: JSON → TOON → JSON with key folding/expansion', () => {
+    describe('keyed tables that win over folding the entries', () => {
+      const inputs: Record<string, unknown>[] = [
+        { q: 1, t: { constructor: { x: 3 }, d: { x: 4 } } },
+        { t: { a: { x: 3 }, d: { x: 4 } } },
+        { a: { x: 3 }, d: { x: 4 } },
+        { t: { a: { p: { x: 1 } }, b: { p: { x: 2 } } } },
+        { t: { a: { x: { m: 1, n: 2 } }, d: { x: { m: 3, n: 4 } } } },
+      ];
+      it.each(inputs)('round-trips %j', (original) => {
+        const encoder = new ToonEncoder({
+          indent: 2,
+          delimiter: ',',
+          keyFolding: 'safe',
+          flattenDepth: 999,
+        });
+        const decoder = new ToonDecoder({
+          indent: 2,
+          strict: true,
+          expandPaths: 'safe',
+        });
+        expect(decoder.decode(encoder.encode(original))).toEqual(original);
+      });
+    });
+
     it('should round-trip chains folded inside the leaf of a folded chain', () => {
       const original = { a: { b: { c: { d: 1 }, e: { f: 2 } } } };
       const encoder = new ToonEncoder({
