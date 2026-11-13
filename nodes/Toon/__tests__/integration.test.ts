@@ -425,6 +425,14 @@ describe('Integration Tests', () => {
           t: { r1: { 'p.q': 1, z: 1 }, r2: { 'p.q': 2, z: 2 } },
         },
         'leaf of a folded chain': { a: { b: { 'c.d': 1, e: 1 } } },
+        'below a cut remainder': { a: { b: { c: { d: { e: 1 }, f: { g: 2 } } } } },
+        'below a longer cut remainder': {
+          a: { b: { c: { d: { p: { q: 1 }, r: { s: 2 } } } } },
+        },
+        'literal dotted key as cut remainder': { a: { b: { 'c.d': { x: { y: 1 }, z: 2 } } } },
+        'unsafe key at end of cut remainder': {
+          a: { b: { c: { constructor: { p: { q: 1 } } } } },
+        },
         'inside an array': { arr: [{ 'c.d': 1, e: 2 }, { f: 1 }] },
         'next to a folded key': { 'a.b': 1, c: { d: 2 } },
         'mixed keyed table': { t: { r1: { 'p.q': 1, z: 1 }, r2: { p: { q: 2 }, z: 2 } } },
