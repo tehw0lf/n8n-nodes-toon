@@ -384,12 +384,13 @@ The specification requires implementations to document the following (§2, §3, 
 
 ### Round-Trip Guarantee
 
-JSON → TOON → JSON preserves data, structure and data types (strings, numbers, booleans, null) for any valid JSON input. It preserves data, not exact formatting or key positions, with these normalizations:
+JSON → TOON → JSON preserves data, structure and data types (strings, numbers, booleans, null) for valid JSON input, except strings and keys containing an unpaired surrogate, which the encoder rejects with an error (§3). It preserves data, not exact formatting or key positions, with these normalizations:
 
 - `-0` becomes `0`.
 - Elements of tabular and keyed tabular forms take the header's field order.
 - Integer-like keys are ordered numerically ahead of string keys, as JavaScript objects do; other keys keep the order in which they were encountered.
 - With Key Folding set to Safe, the nesting is restored only when decoding with Expand Paths set to Safe. With Expand Paths Off the dotted keys stay literal, and other TOON implementations always decode them as literal keys (see [Non-Spec Extensions](#non-spec-extensions)).
+- With Key Folding Off (the default), a key that contains a dot is written unquoted, so decoding with Expand Paths set to Safe splits it into nested objects, merges it with a sibling object of the same name, or in a conflict fails in strict mode and lets the later line win in non-strict mode. Decode such output with Expand Paths Off (see "Key folding conflicts" under Troubleshooting).
 
 See [Documented Implementation Behavior](#documented-implementation-behavior) for details. The implementation passes all conformance requirements for encoders and decoders per the specification.
 
