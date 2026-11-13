@@ -387,6 +387,7 @@ The specification requires implementations to document the following (§2, §3, 
 JSON → TOON → JSON preserves data, structure and data types (strings, numbers, booleans, null) for valid JSON input, except strings and keys containing an unpaired surrogate, which the encoder rejects with an error (§3). It preserves data, not exact formatting or key positions, with these normalizations:
 
 - `-0` becomes `0`.
+- Numbers are IEEE-754 doubles (see "Numeric domain and out-of-range policy (§4)" under [Documented Implementation Behavior](#documented-implementation-behavior)): integers beyond `Number.MAX_SAFE_INTEGER` may lose precision, and a number outside the double range (for example `1e400`, which JavaScript parses as `Infinity`) is not preserved: the encoder writes `null` for it, and `1e-400` becomes `0`.
 - Elements of tabular and keyed tabular forms take the header's field order.
 - Integer-like keys are ordered numerically ahead of string keys, as JavaScript objects do; other keys keep the order in which they were encountered.
 - With Key Folding set to Safe, the nesting is restored only when decoding with Expand Paths set to Safe. With Expand Paths Off the dotted keys stay literal, and other TOON implementations always decode them as literal keys (see [Non-Spec Extensions](#non-spec-extensions)).
