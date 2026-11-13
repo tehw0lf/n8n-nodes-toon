@@ -384,7 +384,14 @@ The specification requires implementations to document the following (§2, §3, 
 
 ### Round-Trip Guarantee
 
-All JSON data can be encoded to TOON and decoded back to JSON with full fidelity. The implementation passes all conformance requirements for encoders and decoders per the specification.
+JSON → TOON → JSON preserves data, structure and data types (strings, numbers, booleans, null) for any valid JSON input. It preserves data, not exact formatting or key positions, with these normalizations:
+
+- `-0` becomes `0`.
+- Elements of tabular and keyed tabular forms take the header's field order.
+- Integer-like keys are ordered numerically ahead of string keys, as JavaScript objects do; other keys keep the order in which they were encountered.
+- With Key Folding set to Safe, the nesting is restored only when decoding with Expand Paths set to Safe. With Expand Paths Off the dotted keys stay literal, and other TOON implementations always decode them as literal keys (see [Non-Spec Extensions](#non-spec-extensions)).
+
+See [Documented Implementation Behavior](#documented-implementation-behavior) for details. The implementation passes all conformance requirements for encoders and decoders per the specification.
 
 ## Advanced Features
 
@@ -430,14 +437,6 @@ When two keys meet at the same key during path expansion (a literal key and an e
 
 Dotted keys are expanded at any depth, including inside the object value of an expanded dotted key: `a.b:` with a nested `c.d: 1` decodes to `{ "a": { "b": { "c": { "d": 1 } } } }`. Arrays are not searched for dotted keys. Quoted keys are never expanded: `"c.d": 1` decodes to `{ "c.d": 1 }`, and in non-strict mode the last write of a key decides whether it counts as quoted.
 
-### Round-Trip Guarantees
-
-TOON guarantees lossless round-trip conversion:
-
-- **JSON → TOON → JSON** preserves all data and structure
-- Works with any valid JSON input
-- Maintains data types (strings, numbers, booleans, null)
-
 ## Zero Dependencies
 
 This node has **zero production dependencies**:
@@ -472,7 +471,7 @@ This node has **zero production dependencies**:
 
 **Cause:** TOON normalizes some values and key positions. `-0` becomes `0`; elements of tabular and keyed tabular forms take the header's field order; and integer-like keys are ordered numerically ahead of string keys, as JavaScript objects do. Other object keys keep the order in which they were encountered (see "Object key order (§2)" under [Documented Implementation Behavior](#documented-implementation-behavior)). With Key Folding set to Safe, a decode with Expand Paths left at Off keeps the dotted keys literal instead of restoring the nested objects.
 
-**Solution:** This is expected — TOON preserves data, not exact formatting. When you use Key Folding, set Expand Paths to Safe when decoding to restore the nesting.
+**Solution:** This is expected — TOON preserves data, not exact formatting. See [Round-Trip Guarantee](#round-trip-guarantee). When you use Key Folding, set Expand Paths to Safe when decoding to restore the nesting.
 
 ## Automated Monitoring
 
