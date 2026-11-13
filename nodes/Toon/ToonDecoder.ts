@@ -127,7 +127,6 @@ export class ToonDecoder {
         indent,
         depth,
         lineNumber,
-        isEmpty: false,
         blankBefore,
       });
 
@@ -749,7 +748,6 @@ export class ToonDecoder {
       indent: line.indent + 2,
       depth: line.depth + 1,
       lineNumber: line.lineNumber,
-      isEmpty: false,
       blankBefore: false,
     };
 

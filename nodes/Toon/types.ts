@@ -81,8 +81,6 @@ export interface ParsedLine {
   depth: number;
   /** Line number (1-indexed) */
   lineNumber: number;
-  /** Whether line is empty or whitespace */
-  isEmpty: boolean;
   /** Whether a blank line was dropped immediately before this line (§12); blank means a line of only spaces in strict mode, a line of only spaces and tabs in non-strict mode (§12, §14.4) */
   blankBefore: boolean;
 }
