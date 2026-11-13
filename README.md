@@ -470,9 +470,9 @@ This node has **zero production dependencies**:
 
 ### Issue: Round-trip doesn't match exactly
 
-**Cause:** TOON normalizes data (e.g., -0 → 0, sorts object keys).
+**Cause:** TOON normalizes some values and key positions. `-0` becomes `0`; elements of tabular and keyed tabular forms take the header's field order; and integer-like keys are ordered numerically ahead of string keys, as JavaScript objects do. Other object keys keep the order in which they were encountered (see "Object key order (§2)" under [Documented Implementation Behavior](#documented-implementation-behavior)). With Key Folding set to Safe, a decode with Expand Paths left at Off keeps the dotted keys literal instead of restoring the nested objects.
 
-**Solution:** This is expected — TOON preserves semantic meaning, not exact formatting.
+**Solution:** This is expected — TOON preserves data, not exact formatting. When you use Key Folding, set Expand Paths to Safe when decoding to restore the nesting.
 
 ## Automated Monitoring
 
