@@ -547,9 +547,24 @@ export class ToonEncoder {
    * Collapses single-key object chains into dotted paths. A chain is left
    * unfolded (written nested) when its folded key equals a literal key of the
    * same object (safe-mode collision rule, §13.4 rule 2 of the archived v3.3
-   * spec), so neither value is overwritten.
+   * spec), so neither value is overwritten. The entries of an object that
+   * would be written as a keyed table are not folded (their values are), so
+   * the table is kept instead of being turned into dotted keys.
    */
   private foldKeys(obj: Record<string, unknown>): Record<string, unknown> {
+    if (utils.getKeyedTabularFields(obj) !== null) {
+      const candidate: Record<string, unknown> = {};
+      this.foldedKeys.set(candidate, new Set());
+      for (const [key, value] of Object.entries(obj)) {
+        const row = this.foldKeys(value as Record<string, unknown>);
+        this.markLiteralDottedKeys(row);
+        utils.setDecodedKey(candidate, key, row);
+      }
+      if (this.getKeyedFields(candidate) !== null) {
+        return candidate;
+      }
+    }
+
     const result: Record<string, unknown> = {};
     const folded = new Set<string>();
     this.foldedKeys.set(result, folded);
