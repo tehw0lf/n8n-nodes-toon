@@ -11,9 +11,10 @@ export class ToonEncoder {
   private options: EncoderOptions;
   private documentDelimiter: Delimiter;
 
-  /** Per object, the keys that `foldKeys` produced by folding a chain */
   /** True while the rows of a keyed table are folded (see foldKeys). */
   private insideRow = false;
+
+  /** Per object, the keys that `foldKeys` produced by folding a chain */
   private foldedKeys = new WeakMap<object, Set<string>>();
 
   /**
