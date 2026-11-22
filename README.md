@@ -254,9 +254,12 @@ Simplify deeply nested JSON structures.
 
 **Output (with Key Folding):**
 ```
-user.profile.name: Alice
-user.profile.email: alice@example.com
+user.profile:
+  name: Alice
+  email: alice@example.com
 ```
+
+Only single-key chains are folded: `user` and `profile` collapse into `user.profile`, while the two fields of `profile` stay nested.
 
 ### Example 5: Different Delimiters
 
